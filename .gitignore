@@ -1,3 +1,6 @@
+#data
+brats2020_data/
+old/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
