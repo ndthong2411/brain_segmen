@@ -1,0 +1,44 @@
+exp_name: "braintumnet_brats2020_tuned"
+
+data:
+  raw_root: "data/raw"
+  proc_root: "data/processed"
+  modality: "t1ce"
+  img_size: 256
+  slices_per_case: 36
+  tumor_slice_ratio: 0.5
+  num_folds: 5
+  fold: 0
+
+train:
+  epochs: 160
+  batch_size: 16
+  lr: 2.0e-4
+  weight_decay: 1.0e-5
+  workers: 4
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.25
+  scheduler: "none"
+  amp: true
+
+model:
+  in_channels: 1
+  num_classes_seg: 1
+  num_classes_cls: 2
+  base: 48
+  patch_size: 4
+  dim: 320
+  n_heads: 8
+  depth: 3
+  roi_stop_grad: false
+
+augment:
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+
+logging:
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  log_dir: "logs"
+  use_tensorboard: true

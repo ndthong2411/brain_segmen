@@ -23,7 +23,7 @@ class DecoderBlock(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2)
-        self.cbam = CBAM(out_ch + out_ch)
+        self.cbam = CBAM(out_ch)  # CBAM on skip connection which has out_ch channels
         self.block = nn.Sequential(conv_bn_relu(out_ch + out_ch, out_ch), conv_bn_relu(out_ch, out_ch))
     def forward(self, x, skip):
         x = self.up(x)
@@ -34,29 +34,33 @@ class DecoderBlock(nn.Module):
 class SegUNetMasked(nn.Module):
     def __init__(self, in_ch=1, base=32, dim=256, patch=8, depth=2, n_heads=4):
         super().__init__()
+        self.patch = patch
         self.e1 = EncoderBlock(in_ch, base)
         self.e2 = EncoderBlock(base, base*2)
         self.e3 = EncoderBlock(base*2, base*4)
         self.e4 = EncoderBlock(base*4, base*8)
+        # After 4 encoder blocks: spatial size is H/16 x W/16
+        # Transformer will further reduce by patch size
         self.bottleneck_conv = conv_bn_relu(base*8, dim, k=1, s=1, p=0)
         self.amt = AdaptiveMaskedTransformer(in_ch=dim, dim=dim, patch_size=patch, depth=depth, n_heads=n_heads)
-        self.bottleneck_out = conv_bn_relu(dim, base*16, k=1, s=1, p=0)
-        self.d4 = DecoderBlock(base*16, base*8)
+        # Upsample transformer output back to original bottleneck size
+        self.tr_upsample = nn.ConvTranspose2d(dim, base*8, kernel_size=patch, stride=patch)
+        self.d4 = DecoderBlock(base*8, base*8)
         self.d3 = DecoderBlock(base*8, base*4)
         self.d2 = DecoderBlock(base*4, base*2)
         self.d1 = DecoderBlock(base*2, base)
         self.head = nn.Conv2d(base, 1, 1)
     def forward(self, x):
-        s1, x1 = self.e1(x)
-        s2, x2 = self.e2(x1)
-        s3, x3 = self.e3(x2)
-        s4, x4 = self.e4(x3)
-        b = self.bottleneck_conv(x4)
-        b = self.amt(b)
-        b = self.bottleneck_out(b)
-        x = self.d4(b, s4)
-        x = self.d3(x, s3)
-        x = self.d2(x, s2)
-        x = self.d1(x, s1)
-        seg = self.head(x)
+        s1, x1 = self.e1(x)      # s1: base, H, W
+        s2, x2 = self.e2(x1)     # s2: base*2, H/2, W/2
+        s3, x3 = self.e3(x2)     # s3: base*4, H/4, W/4
+        s4, x4 = self.e4(x3)     # s4: base*8, H/8, W/8
+        b = self.bottleneck_conv(x4)  # dim, H/16, W/16
+        b = self.amt(b)          # dim, H/16/patch, W/16/patch
+        b = self.tr_upsample(b)  # base*8, H/16, W/16 (upsampled back)
+        x = self.d4(b, s4)       # base*8, H/8, W/8
+        x = self.d3(x, s3)       # base*4, H/4, W/4
+        x = self.d2(x, s2)       # base*2, H/2, W/2
+        x = self.d1(x, s1)       # base, H, W
+        seg = self.head(x)       # 1, H, W
         return seg

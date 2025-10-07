@@ -18,7 +18,7 @@ def main():
         cfg["data"]["fold"] = args.fold
 
     set_seed(42, deterministic=False)
-    best_iou = train_one_fold(cfg, cfg["data"]["fold"])
+    best_iou = train_one_fold(cfg, cfg["data"]["fold"], config_path=args.cfg)
     print("Best IoU:", best_iou)
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 #data
 brats2020_data/
+braintumnet/data
+
 old/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
