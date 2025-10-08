@@ -5,7 +5,7 @@ from ..models.braintumnet import BrainTumNet
 from ..data.brats2020_dataset import SliceDataset
 from ..losses import MultiTaskLoss
 from ..metrics import iou_score, dice_score
-from ..utils.io import ensure_dir, save_ckpt
+from ..utils.io import ensure_dir, save_ckpt, save_training_state
 from ..utils.logger import TrainingLogger
 from ..utils.metrics_logger import MetricsLogger
 from ..metrics import compute_intersection_union
@@ -51,7 +51,7 @@ def build_model(cfg: Dict):
                        dim=mcfg["dim"], patch=mcfg["patch_size"], depth=mcfg["depth"], n_heads=mcfg["n_heads"],
                        roi_stop_grad=mcfg["roi_stop_grad"])
 
-def train_one_fold(cfg: Dict, fold: int, config_path: str = None):
+def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: str = None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Initialize loggers
@@ -98,7 +98,20 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None):
     step = 0
     best_iou = -1.0
     best_iou_epoch = 0
+    start_epoch = 0
     start_time = time.time()
+
+    # Resume from checkpoint if specified
+    if resume_from is not None:
+        logger.info(f"Resuming training from checkpoint: {resume_from}")
+        from ..utils.io import load_training_state
+        resume_info = load_training_state(resume_from, model, opt, plateau_scheduler, scaler, device, expected_fold=fold)
+        start_epoch = resume_info['epoch'] + 1  # Start from next epoch
+        best_iou = resume_info['best_iou']
+        best_iou_epoch = resume_info['best_iou_epoch']
+        step = start_epoch * len(train_loader)
+        logger.info(f"  Starting from epoch {start_epoch}")
+        logger.info(f"  Previous best IoU: {best_iou:.4f} at epoch {best_iou_epoch + 1}")
 
     # Early stopping
     early_stop_patience = cfg["train"].get("early_stop_patience", 30)
@@ -106,7 +119,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None):
 
     logger.info(f"Starting training for {cfg['train']['epochs']} epochs...")
 
-    for epoch in range(cfg["train"]["epochs"]):
+    for epoch in range(start_epoch, cfg["train"]["epochs"]):
         epoch_start_time = time.time()
         logger.epoch_start(epoch, cfg["train"]["epochs"], "TRAIN")
 
@@ -259,6 +272,13 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None):
             if new_lr != old_lr:
                 logger.info(f"ReduceLROnPlateau: Reducing learning rate {old_lr:.2e} -> {new_lr:.2e}")
                 print(f"  -> Learning rate reduced: {old_lr:.2e} -> {new_lr:.2e}")
+
+        # Save "last" checkpoint every epoch for resume capability
+        ckpt_dir = cfg["logging"]["save_dir"]
+        ensure_dir(ckpt_dir)
+        last_ckpt_path = os.path.join(ckpt_dir, f"last_fold{fold}.pth")
+        save_training_state(last_ckpt_path, epoch, model, opt, plateau_scheduler, scaler,
+                           best_iou, best_iou_epoch, cfg, fold=fold)
 
         # Early stopping check
         if epochs_without_improvement >= early_stop_patience:

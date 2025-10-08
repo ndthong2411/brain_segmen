@@ -1,0 +1,49 @@
+{
+  "exp_name": "braintumnet_full_multimodal",
+  "data": {
+    "raw_root": "data/raw",
+    "proc_root": "data/processed_full_multimodal",
+    "modality": "multi",
+    "img_size": 256,
+    "slices_per_case": 30,
+    "tumor_slice_ratio": 0.5,
+    "num_folds": 5,
+    "fold": 2
+  },
+  "train": {
+    "epochs": 150,
+    "batch_size": 12,
+    "lr": 0.00015,
+    "weight_decay": 0.0001,
+    "workers": 4,
+    "seg_loss_weight": 1.0,
+    "cls_loss_weight": 0.5,
+    "scheduler": "plateau",
+    "amp": true,
+    "early_stop_patience": 30,
+    "warmup_steps": 500,
+    "min_lr": 1e-06
+  },
+  "model": {
+    "in_channels": 4,
+    "num_classes_seg": 1,
+    "num_classes_cls": 2,
+    "base": 32,
+    "patch_size": 8,
+    "dim": 256,
+    "n_heads": 4,
+    "depth": 2,
+    "roi_stop_grad": true
+  },
+  "augment": {
+    "rotate_deg": 20,
+    "hflip_p": 0.5,
+    "vflip_p": 0.5
+  },
+  "logging": {
+    "out_dir": "runs",
+    "save_dir": "checkpoints",
+    "log_dir": "logs",
+    "use_tensorboard": true
+  }
+}
