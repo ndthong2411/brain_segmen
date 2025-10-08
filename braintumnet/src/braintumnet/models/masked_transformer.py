@@ -35,16 +35,33 @@ class MaskedSelfAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
+
+        # Check if PyTorch 2.0+ scaled_dot_product_attention is available (A100 optimized)
+        self.use_sdpa = hasattr(F, 'scaled_dot_product_attention')
+
     def forward(self, x, softmask):  # x: B,N,C ; softmask: B,H,N
         B,N,C = x.shape
         qkv = self.qkv(x).reshape(B,N,3,self.n_heads,self.head_dim).permute(2,0,3,1,4)
         q,k,v = qkv[0], qkv[1], qkv[2]  # B,H,N,D
-        attn = (q @ k.transpose(-2,-1)) / (self.head_dim ** 0.5)  # B,H,N,N
-        key_bias = torch.log(softmask.unsqueeze(-2) + 1e-6)  # B,H,1,N
-        attn = attn + key_bias
-        attn = attn.softmax(-1)
-        attn = self.attn_drop(attn)
-        out = (attn @ v).transpose(1,2).reshape(B,N,C)
+
+        # Use PyTorch 2.0+ Flash Attention if available (A100 optimized)
+        if self.use_sdpa and softmask.sum() == (B * self.n_heads * N):  # Only if no masking
+            # Standard SDPA (Flash Attention 2 backend on A100)
+            out = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
+                is_causal=False
+            )
+            out = out.transpose(1,2).reshape(B,N,C)
+        else:
+            # Manual attention with soft masking
+            attn = (q @ k.transpose(-2,-1)) / (self.head_dim ** 0.5)  # B,H,N,N
+            key_bias = torch.log(softmask.unsqueeze(-2) + 1e-6)  # B,H,1,N
+            attn = attn + key_bias
+            attn = attn.softmax(-1)
+            attn = self.attn_drop(attn)
+            out = (attn @ v).transpose(1,2).reshape(B,N,C)
+
         out = self.proj_drop(self.proj(out))
         return out
 

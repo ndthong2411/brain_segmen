@@ -3,6 +3,8 @@ brats2020_data/
 braintumnet/data
 checkpoints/
 old/
+logs/
+runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

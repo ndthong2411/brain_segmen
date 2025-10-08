@@ -12,17 +12,24 @@ data:
 
 train:
   epochs: 150                                    # Can train longer with more data
-  batch_size: 64                                 # Reduced for 4-channel input (more GPU memory)
-  lr: 1.5e-4                                     # Slightly lower LR for multi-modal
+  batch_size: 96                                 # Optimized for A100 (increased from 64)
+  val_batch_size: 128                            # Larger validation batch (no gradients)
+  lr: 2.25e-4                                    # Scaled with batch size: 1.5e-4 * (96/64)
   weight_decay: 1.0e-4                           # Strong regularization
-  workers: 4
+  workers: 10                                    # Increased for A100 system (8-12 recommended)
   seg_loss_weight: 1.0
   cls_loss_weight: 0.5
   scheduler: "plateau"                           # Adaptive LR scheduling
-  amp: true                                      # CRITICAL for 4-channel input
+  amp: true                                      # CRITICAL for 4-channel input + A100
   early_stop_patience: 30                        # More patience with larger dataset
   warmup_steps: 500                              # Warmup for first 500 steps
   min_lr: 1.0e-6                                 # Minimum LR
+  grad_clip_norm: 1.0                            # Gradient clipping for stability
+  log_interval: 50                               # Reduced logging frequency (was 10)
+  val_interval: 1                                # Validate every N epochs (1=every epoch)
+  use_compile: true                              # PyTorch 2.0+ compilation for speed
+  use_channels_last: true                        # A100-optimized memory format
+  grad_accum_steps: 1                            # Gradient accumulation (1=disabled)
 
 model:
   in_channels: 4                                 # 4 MRI modalities
