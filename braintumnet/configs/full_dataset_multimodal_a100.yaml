@@ -12,7 +12,7 @@ data:
 
 train:
   epochs: 150                                    # Can train longer with more data
-  batch_size: 12                                 # Reduced for 4-channel input (more GPU memory)
+  batch_size: 64                                 # Reduced for 4-channel input (more GPU memory)
   lr: 1.5e-4                                     # Slightly lower LR for multi-modal
   weight_decay: 1.0e-4                           # Strong regularization
   workers: 4
