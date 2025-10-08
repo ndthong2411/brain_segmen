@@ -27,7 +27,7 @@ train:
   grad_clip_norm: 1.0                            # Gradient clipping for stability
   log_interval: 50                               # Reduced logging frequency (was 10)
   val_interval: 1                                # Validate every N epochs (1=every epoch)
-  use_compile: true                              # PyTorch 2.0+ compilation for speed
+  use_compile: false                             # Disabled: ptxas compilation issues on this system
   use_channels_last: true                        # A100-optimized memory format
   grad_accum_steps: 1                            # Gradient accumulation (1=disabled)
 

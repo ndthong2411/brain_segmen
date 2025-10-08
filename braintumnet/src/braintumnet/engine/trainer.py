@@ -1,4 +1,4 @@
-import os, math, torch, time
+import os, math, torch, time, sys
 from torch.utils.data import DataLoader
 from typing import Dict
 from ..models.braintumnet import BrainTumNet
@@ -176,7 +176,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
         # Progress bar for training
         if HAS_TQDM:
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg['train']['epochs']} [Train]", ncols=100)
+            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg['train']['epochs']} [Train]",
+                       ncols=120, leave=True, file=sys.stdout)
         else:
             pbar = train_loader
 
@@ -224,6 +225,11 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             if HAS_TQDM:
                 actual_loss = loss.item() * cfg["train"].get("grad_accum_steps", 1)  # Show unscaled loss
                 pbar.set_postfix({'loss': f'{actual_loss:.4f}', 'lr': f'{opt.param_groups[0]["lr"]:.2e}'})
+            else:
+                # Fallback: print progress every 10 batches if no tqdm
+                if (batch_idx + 1) % 10 == 0:
+                    actual_loss = loss.item() * cfg["train"].get("grad_accum_steps", 1)
+                    print(f"  [{batch_idx+1}/{len(train_loader)}] loss: {actual_loss:.4f}, lr: {opt.param_groups[0]['lr']:.2e}", flush=True)
 
             # Log to TensorBoard (reduced frequency for A100 optimization)
             log_interval = cfg["train"].get("log_interval", 10)
@@ -248,7 +254,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
             # Progress bar for validation
             if HAS_TQDM:
-                val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{cfg['train']['epochs']} [Val]", ncols=100)
+                val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{cfg['train']['epochs']} [Val]",
+                               ncols=120, leave=True, file=sys.stdout)
             else:
                 val_pbar = val_loader
 
