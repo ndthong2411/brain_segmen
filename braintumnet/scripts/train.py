@@ -8,9 +8,9 @@ from braintumnet.utils.seed import set_seed
 from braintumnet.engine.trainer import train_one_fold
 
 def main():
-    
-    print(f"Process PID: {os.getpid()}")
-    
+
+    print(f"Process PID: {os.getpid()}", flush=True)
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", type=str, default=str(ROOT / "configs" / "default.yaml"),
                     help="Path to config YAML file")
@@ -20,7 +20,9 @@ def main():
                     help="Resume training. Use --resume (auto-find) or --resume <path>")
     args = ap.parse_args()
 
+    print(f"Loading config from: {args.cfg}", flush=True)
     cfg = load_yaml(args.cfg)
+    print(f"Config loaded successfully", flush=True)
     if args.fold is not None:
         cfg["data"]["fold"] = args.fold
 
@@ -50,11 +52,13 @@ def main():
         print(f"✓ Using checkpoint: {args.resume}")
         print(f"  WARNING: Make sure this checkpoint is for fold {fold}!")
 
+    print(f"Setting seed...", flush=True)
     set_seed(42, deterministic=False)
+    print(f"Starting training for fold {fold}...", flush=True)
     best_iou = train_one_fold(cfg, fold,
                                config_path=args.cfg,
                                resume_from=resume_path)
-    print("Best IoU:", best_iou)
+    print(f"Training completed! Best IoU: {best_iou}", flush=True)
 
 if __name__ == "__main__":
     main()

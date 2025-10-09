@@ -109,7 +109,24 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             logger.warning(f"torch.compile() failed: {e}. Proceeding without compilation.")
 
     opt = torch.optim.Adam(model.parameters(), lr=cfg["train"]["lr"], weight_decay=cfg["train"]["weight_decay"])
-    crit = MultiTaskLoss(cfg["train"]["seg_loss_weight"], cfg["train"]["cls_loss_weight"], boundary_w=cfg["train"].get("boundary_loss_weight", 0.0))
+
+    # Setup loss function with class imbalance handling
+    loss_type = cfg["train"].get("loss_type", "dice_ce")
+    crit = MultiTaskLoss(
+        seg_w=cfg["train"]["seg_loss_weight"],
+        cls_w=cfg["train"]["cls_loss_weight"],
+        boundary_w=cfg["train"].get("boundary_loss_weight", 0.0),
+        loss_type=loss_type,
+        pos_weight=cfg["train"].get("pos_weight", None),
+        focal_alpha=cfg["train"].get("focal_alpha", 0.25),
+        focal_gamma=cfg["train"].get("focal_gamma", 2.0)
+    )
+    logger.info(f"Using loss type: {loss_type}")
+    if loss_type == "dice_ce_weighted":
+        logger.info(f"  Positive class weight: {cfg['train'].get('pos_weight', 'None')}")
+    elif loss_type == "dice_focal":
+        logger.info(f"  Focal alpha: {cfg['train'].get('focal_alpha', 0.25)}, gamma: {cfg['train'].get('focal_gamma', 2.0)}")
+
     scaler = torch.amp.GradScaler(device='cuda', enabled=cfg["train"].get("amp", False))
 
     # Learning rate scheduler setup
