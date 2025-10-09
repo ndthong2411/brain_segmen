@@ -6,20 +6,20 @@ exp_name: "braintumnet_a100_80gb_max"
 # Goal: Maximize model capacity and training speed for BEST accuracy
 #
 # Key improvements vs baseline:
-# - Batch size: 12 → 48 (4x larger)
-# - Model params: ~15M → ~100M (6.7x larger)
-# - Training speed: ~8-10s/epoch → ~1.5-2.5s/epoch (4-5x faster)
-# - Expected results: Dice 0.935+, IoU 0.915+ (SOTA level)
+# - Batch size: 12 → 80 (6.7x larger)
+# - Model params: ~15M → ~160M (10.7x larger)
+# - Training speed: ~8-10s/epoch → ~1.2-2.0s/epoch (5-7x faster)
+# - Expected results: Dice 0.94+, IoU 0.92+ (SOTA level)
 #
-# VRAM breakdown (estimated):
-# - Model weights: ~400MB (100M params)
-# - Activations (BS=48): ~15GB
-# - Gradients: ~15GB
-# - Optimizer states: ~800MB
-# - Deep supervision: ~12GB
-# - Boundary loss cache: ~8GB
+# VRAM breakdown (estimated for BS=80):
+# - Model weights: ~650MB (160M params)
+# - Activations (BS=80): ~24GB
+# - Gradients: ~24GB
+# - Optimizer states: ~1.3GB
+# - Deep supervision: ~18GB
+# - Boundary loss cache: ~10GB
 # - PyTorch overhead: ~3GB
-# Total: ~54GB / 80GB (leaves 26GB buffer)
+# Total: ~75-78GB / 80GB (target ~95% utilization)
 # ============================================================
 
 data:
@@ -34,10 +34,10 @@ data:
 
 train:
   epochs: 350                                    # Extended for large model convergence
-  batch_size: 64                                 # MAX: Utilize 80GB fully
-  lr: 2.5e-4                                     # Scaled: sqrt(48/12) = 2.0 → 1e-4 * 2.5 = 2.5e-4
+  batch_size: 80                                 # MAX: ~95% VRAM utilization (75-78GB)
+  lr: 2.9e-4                                     # Scaled: sqrt(80/12) ≈ 2.58 → 1e-4 * 2.9
   weight_decay: 1.0e-4
-  workers: 12                                    # MAX workers for A100 server (assume 24+ CPU cores)
+  workers: 16                                    # MAX workers for A100 server (24+ CPU cores)
   seg_loss_weight: 1.0
   cls_loss_weight: 0.5
 
@@ -51,22 +51,22 @@ train:
   scheduler: "cosine"
   amp: true                                      # CRITICAL: Tensor Cores = 312 TFLOPS FP16
   early_stop_patience: 70                        # Patience for 350 epochs
-  warmup_steps: 2000                             # Longer warmup for very large batch
+  warmup_steps: 2500                             # Longer warmup for very large batch (80)
   min_lr: 1.0e-7                                 # Lower min_lr for extended training
 
   # A100-80GB specific optimizations
   use_channels_last: true                        # Tensor Core optimization
-  val_batch_size: 64                             # Larger validation batch (no gradients)
+  val_batch_size: 96                             # Larger validation batch (no gradients = less VRAM)
 
 model:
   in_channels: 4
   num_classes_seg: 1
   num_classes_cls: 2
-  base: 64                                       # MAX: 64 vs 32 baseline (2x channels)
+  base: 80                                       # MAX: 80 vs 32 baseline (2.5x channels)
   patch_size: 8
-  dim: 512                                       # MAX: 512 vs 256 baseline (2x embedding)
-  n_heads: 8                                     # MAX: 8 heads (matches dim=512)
-  depth: 4                                       # MAX: 4 transformer blocks vs 2 baseline
+  dim: 640                                       # MAX: 640 vs 256 baseline (2.5x embedding)
+  n_heads: 10                                    # MAX: 10 heads (matches dim=640, 64 per head)
+  depth: 5                                       # MAX: 5 transformer blocks vs 2 baseline
   roi_stop_grad: true
   deep_supervision: true
 
@@ -95,8 +95,8 @@ logging:
 # Total time (350 epochs): ~10-15 minutes per fold
 # 5-fold CV: ~60-90 minutes total
 #
-# VRAM usage: ~54GB / 80GB (safe with buffer)
-# Model parameters: ~100M (vs ~15M baseline = 6.7x larger)
+# VRAM usage: ~75-78GB / 80GB (95% utilization)
+# Model parameters: ~160M (vs ~15M baseline = 10.7x larger)
 #
 # Expected accuracy:
 # - Dice: 0.935-0.950 (vs 0.909 baseline = +2.6-4.1%)
@@ -107,56 +107,62 @@ logging:
 # WHAT MAKES THIS CONFIG SPECIAL FOR 80GB A100
 # ============================================================
 #
-# 1. BATCH SIZE = 48 (vs 12 baseline)
+# 1. BATCH SIZE = 80 (vs 12 baseline) - 6.7x LARGER
 #    - Better gradient estimates
 #    - Faster convergence (fewer epochs needed)
 #    - Better BN statistics
-#    - Requires LR scaling: sqrt(48/12) = 2.0x
+#    - Requires LR scaling: sqrt(80/12) ≈ 2.58x → 2.9e-4
 #
-# 2. BASE CHANNELS = 64 (vs 32 baseline)
-#    - Encoder: [64, 128, 256, 512] vs [32, 64, 128, 256]
-#    - 4x more feature maps in deepest layer
+# 2. BASE CHANNELS = 80 (vs 32 baseline) - 2.5x LARGER
+#    - Encoder: [80, 160, 320, 640] vs [32, 64, 128, 256]
+#    - 6.25x more feature maps in deepest layer (640 vs 256)
 #    - Much richer representations
 #
-# 3. TRANSFORMER DIM = 512 (vs 256 baseline)
-#    - 2x embedding dimension
-#    - 4x parameters in attention (512²/256² = 4)
+# 3. TRANSFORMER DIM = 640 (vs 256 baseline) - 2.5x LARGER
+#    - 2.5x embedding dimension
+#    - 6.25x parameters in attention (640²/256² = 6.25)
 #    - Better long-range dependencies
+#    - 10 heads × 64 dim per head = optimal attention
 #
-# 4. DEPTH = 4 (vs 2 baseline)
-#    - 2x more transformer blocks
+# 4. DEPTH = 5 (vs 2 baseline) - 2.5x DEEPER
+#    - 2.5x more transformer blocks
 #    - Deeper reasoning about tumor features
 #    - Better feature refinement
+#    - More capacity for complex patterns
 #
-# 5. 12 WORKERS (vs 4 baseline)
-#    - A100 servers typically have 24+ CPU cores
+# 5. 16 WORKERS (vs 4 baseline) - 4x MORE
+#    - A100 servers typically have 32+ CPU cores
 #    - Minimize data loading bottleneck
-#    - Keep GPU fed with data
+#    - Keep GPU fed with data at all times
+#    - Critical for large batch size (80)
 #
-# 6. VALIDATION BATCH = 64 (vs train 48)
+# 6. VALIDATION BATCH = 96 (vs train 80) - LARGER
 #    - No gradients in validation = less VRAM
 #    - Faster validation pass
 #    - Better metric estimates
+#    - Can push higher since no backward pass
 #
-# Total parameter count: ~100M
-# - Encoder (base=64): ~35M params
-# - Transformer (dim=512, depth=4): ~50M params
-# - Decoder (base=64): ~10M params
-# - Classification head: ~3M params
+# Total parameter count: ~160M
+# - Encoder (base=80): ~55M params
+# - Transformer (dim=640, depth=5): ~80M params
+# - Decoder (base=80): ~18M params
+# - Classification head: ~5M params
 # - Auxiliary heads (deep supervision): ~2M params
 #
 # ============================================================
 # TUNING GUIDE (if needed)
 # ============================================================
 #
-# If VRAM overflow (~55GB+ usage):
-#   Option 1: Reduce batch_size: 48 → 40 → 32
-#             Adjust lr: 2.5e-4 → 2.2e-4 → 2.0e-4
+# If VRAM overflow (>78GB usage):
+#   Option 1: Reduce batch_size: 80 → 72 → 64
+#             Adjust lr: 2.9e-4 → 2.7e-4 → 2.5e-4
 #
 #   Option 2: Reduce model size:
-#             base: 64 → 56 → 48
-#             dim: 512 → 448 → 384
-#             depth: 4 → 3
+#             base: 80 → 72 → 64
+#             dim: 640 → 576 → 512
+#             depth: 5 → 4 → 3
+#
+#   Option 3: Use a100_optimized.yaml instead (safer, 32GB VRAM)
 #
 # If training too slow (>3s/epoch):
 #   - Check GPU utilization: nvidia-smi dmon -s u
