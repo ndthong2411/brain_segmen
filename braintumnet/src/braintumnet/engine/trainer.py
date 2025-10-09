@@ -1,9 +1,10 @@
 import os, math, torch, time, sys
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from typing import Dict
 from ..models.braintumnet import BrainTumNet
 from ..data.brats2020_dataset import SliceDataset
-from ..losses import MultiTaskLoss
+from ..losses import MultiTaskLoss, dice_loss_with_logits
 from ..metrics import iou_score, dice_score
 from ..utils.io import ensure_dir, save_ckpt, save_training_state
 from ..utils.logger import TrainingLogger
@@ -67,7 +68,7 @@ def build_model(cfg: Dict):
     mcfg = cfg["model"]
     return BrainTumNet(in_ch=mcfg["in_channels"], num_cls=mcfg["num_classes_cls"], base=mcfg["base"],
                        dim=mcfg["dim"], patch=mcfg["patch_size"], depth=mcfg["depth"], n_heads=mcfg["n_heads"],
-                       roi_stop_grad=mcfg["roi_stop_grad"])
+                       roi_stop_grad=mcfg["roi_stop_grad"], deep_supervision=mcfg.get("deep_supervision", False))
 
 def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: str = None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -108,7 +109,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             logger.warning(f"torch.compile() failed: {e}. Proceeding without compilation.")
 
     opt = torch.optim.Adam(model.parameters(), lr=cfg["train"]["lr"], weight_decay=cfg["train"]["weight_decay"])
-    crit = MultiTaskLoss(cfg["train"]["seg_loss_weight"], cfg["train"]["cls_loss_weight"])
+    crit = MultiTaskLoss(cfg["train"]["seg_loss_weight"], cfg["train"]["cls_loss_weight"], boundary_w=cfg["train"].get("boundary_loss_weight", 0.0))
     scaler = torch.amp.GradScaler(device='cuda', enabled=cfg["train"].get("amp", False))
 
     # Learning rate scheduler setup
@@ -191,8 +192,31 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 img = img.to(memory_format=torch.channels_last)
 
             with torch.amp.autocast(device_type='cuda', enabled=cfg["train"].get("amp", False)):
-                seg, cls = model(img)
+                model_output = model(img)
+
+                # Handle deep supervision output
+                if cfg["model"].get("deep_supervision", False):
+                    seg, cls, aux_outputs = model_output  # seg: main output, aux_outputs: [aux3, aux2, aux1]
+                else:
+                    seg, cls = model_output
+                    aux_outputs = None
+
+                # Main loss (segmentation + classification)
                 loss, l_seg, l_cls = crit(seg, msk, cls, lab)
+
+                # Deep supervision auxiliary losses
+                if aux_outputs is not None:
+                    aux_weights = cfg["train"].get("aux_loss_weights", [0.5, 0.25, 0.125])
+                    for i, aux_output in enumerate(aux_outputs):
+                        # Resize auxiliary output to match mask size
+                        aux_resized = F.interpolate(aux_output, size=msk.shape[-2:],
+                                                    mode='bilinear', align_corners=False)
+                        # Compute auxiliary loss (only segmentation, no classification)
+                        aux_loss_val = dice_loss_with_logits(aux_resized, msk) + \
+                                       torch.nn.functional.binary_cross_entropy_with_logits(aux_resized, msk)
+                        # Add weighted auxiliary loss
+                        weight = aux_weights[i] if i < len(aux_weights) else 0.125
+                        loss = loss + weight * aux_loss_val
 
                 # Gradient accumulation support
                 grad_accum_steps = cfg["train"].get("grad_accum_steps", 1)

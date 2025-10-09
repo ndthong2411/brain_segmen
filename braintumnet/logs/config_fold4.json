@@ -1,5 +1,5 @@
 {
-  "exp_name": "braintumnet_full_multimodal",
+  "exp_name": "braintumnet_improved_v2_boundary_loss",
   "data": {
     "raw_root": "data/raw",
     "proc_root": "data/processed_full_multimodal",
@@ -11,17 +11,23 @@
     "fold": 4
   },
   "train": {
-    "epochs": 150,
+    "epochs": 250,
     "batch_size": 12,
-    "lr": 0.00015,
+    "lr": 0.0001,
     "weight_decay": 0.0001,
     "workers": 4,
     "seg_loss_weight": 1.0,
     "cls_loss_weight": 0.5,
-    "scheduler": "plateau",
+    "boundary_loss_weight": 0.2,
+    "aux_loss_weights": [
+      0.5,
+      0.25,
+      0.125
+    ],
+    "scheduler": "cosine",
     "amp": true,
-    "early_stop_patience": 30,
-    "warmup_steps": 500,
+    "early_stop_patience": 50,
+    "warmup_steps": 1000,
     "min_lr": 1e-06
   },
   "model": {
@@ -33,7 +39,8 @@
     "dim": 256,
     "n_heads": 4,
     "depth": 2,
-    "roi_stop_grad": true
+    "roi_stop_grad": true,
+    "deep_supervision": true
   },
   "augment": {
     "rotate_deg": 20,

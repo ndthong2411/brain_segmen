@@ -32,9 +32,11 @@ class DecoderBlock(nn.Module):
         return x
 
 class SegUNetMasked(nn.Module):
-    def __init__(self, in_ch=1, base=32, dim=256, patch=8, depth=2, n_heads=4):
+    def __init__(self, in_ch=1, base=32, dim=256, patch=8, depth=2, n_heads=4, deep_supervision=False):
         super().__init__()
         self.patch = patch
+        self.deep_supervision = deep_supervision
+
         self.e1 = EncoderBlock(in_ch, base)
         self.e2 = EncoderBlock(base, base*2)
         self.e3 = EncoderBlock(base*2, base*4)
@@ -50,6 +52,12 @@ class SegUNetMasked(nn.Module):
         self.d2 = DecoderBlock(base*4, base*2)
         self.d1 = DecoderBlock(base*2, base)
         self.head = nn.Conv2d(base, 1, 1)
+
+        # Deep Supervision: auxiliary segmentation heads at intermediate decoder levels
+        if self.deep_supervision:
+            self.aux_head3 = nn.Conv2d(base*4, 1, 1)  # After d3: 64x64 resolution
+            self.aux_head2 = nn.Conv2d(base*2, 1, 1)  # After d2: 128x128 resolution
+            self.aux_head1 = nn.Conv2d(base, 1, 1)    # After d1: 256x256 resolution (same as main head)
     def forward(self, x):
         s1, x1 = self.e1(x)      # s1: base, H, W
         s2, x2 = self.e2(x1)     # s2: base*2, H/2, W/2
@@ -58,9 +66,20 @@ class SegUNetMasked(nn.Module):
         b = self.bottleneck_conv(x4)  # dim, H/16, W/16
         b = self.amt(b)          # dim, H/16/patch, W/16/patch
         b = self.tr_upsample(b)  # base*8, H/16, W/16 (upsampled back)
+
         x = self.d4(b, s4)       # base*8, H/8, W/8
+
         x = self.d3(x, s3)       # base*4, H/4, W/4
+        aux3 = self.aux_head3(x) if self.deep_supervision else None  # Auxiliary output at 64x64
+
         x = self.d2(x, s2)       # base*2, H/2, W/2
+        aux2 = self.aux_head2(x) if self.deep_supervision else None  # Auxiliary output at 128x128
+
         x = self.d1(x, s1)       # base, H, W
-        seg = self.head(x)       # 1, H, W
+        aux1 = self.aux_head1(x) if self.deep_supervision else None  # Auxiliary output at 256x256
+
+        seg = self.head(x)       # 1, H, W - Main output
+
+        if self.deep_supervision:
+            return seg, [aux3, aux2, aux1]
         return seg
