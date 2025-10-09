@@ -26,10 +26,10 @@ data:
 
 train:
   epochs: 300                                    # Extended training for better convergence
-  batch_size: 32                                 # OPTIMIZED: Larger batch for A100 (40GB)
+  batch_size: 64                                 # OPTIMIZED: Larger batch for A100 (40GB)
   lr: 2.0e-4                                     # SCALED: Higher LR for larger batch (sqrt scaling)
   weight_decay: 1.0e-4
-  workers: 8                                     # OPTIMIZED: More workers for fast PCIe 4.0
+  workers: 12                                     # OPTIMIZED: More workers for fast PCIe 4.0
   seg_loss_weight: 1.0
   cls_loss_weight: 0.5
 
