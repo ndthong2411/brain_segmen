@@ -294,7 +294,12 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     if cfg["train"].get("use_channels_last", False):
                         img = img.to(memory_format=torch.channels_last)
 
-                    seg, cls = model(img)
+                    # Handle deep supervision outputs
+                    model_output = model(img)
+                    if cfg["model"].get("deep_supervision", False):
+                        seg, cls, _ = model_output  # Ignore aux outputs in validation
+                    else:
+                        seg, cls = model_output
 
                     # Accumulate intersection and union for global metrics
                     inter, union = compute_intersection_union(seg, msk)
