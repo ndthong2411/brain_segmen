@@ -34,7 +34,7 @@ data:
 
 train:
   epochs: 350                                    # Extended for large model convergence
-  batch_size: 48                                 # MAX: Utilize 80GB fully
+  batch_size: 64                                 # MAX: Utilize 80GB fully
   lr: 2.5e-4                                     # Scaled: sqrt(48/12) = 2.0 → 1e-4 * 2.5 = 2.5e-4
   weight_decay: 1.0e-4
   workers: 12                                    # MAX workers for A100 server (assume 24+ CPU cores)

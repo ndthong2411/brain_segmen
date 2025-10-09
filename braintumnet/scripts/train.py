@@ -8,6 +8,9 @@ from braintumnet.utils.seed import set_seed
 from braintumnet.engine.trainer import train_one_fold
 
 def main():
+    
+    print(f"Process PID: {os.getpid()}")
+    
     ap = argparse.ArgumentParser()
     ap.add_argument("--cfg", type=str, default=str(ROOT / "configs" / "default.yaml"),
                     help="Path to config YAML file")
