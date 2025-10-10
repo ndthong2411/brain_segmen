@@ -37,6 +37,7 @@ train:
   workers: 12                                   # A100 server has many CPU cores
 
   # Multi-class segmentation loss
+  loss_type: "multiclass_dice_focal"            # REQUIRED for 3-class segmentation
   seg_loss_type: "combined"                     # Dice + Focal
   seg_loss_weight: 1.0
   cls_loss_weight: 0.5
