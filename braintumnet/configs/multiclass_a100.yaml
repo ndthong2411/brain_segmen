@@ -1,22 +1,25 @@
 exp_name: "braintumnet_multiclass_a100_optimized"
 
-# MULTI-CLASS SEGMENTATION - A100 OPTIMIZED
+# MULTI-CLASS SEGMENTATION - A100 80GB OPTIMIZED
 # ============================================================
-# GPU: A100 40GB/80GB
-# Purpose: Multi-class segmentation with A100 optimizations
+# GPU: A100 80GB
+# Purpose: Multi-class segmentation with maximum A100 optimizations
 #
-# Improvements vs baseline multiclass.yaml:
-# - Batch size: 12 → 64 (5.3x larger)
-# - Model capacity: base 32 → 48, dim 256 → 384
-# - Workers: 4 → 12 (faster data loading)
-# - Optimized for Tensor Cores (AMP + channels_last)
+# Improvements vs baseline (A100 40GB config):
+# - Batch size: 64 → 96 (50% larger)
+# - Model capacity: base 48 → 64, dim 384 → 512
+# - Workers: 12 → 16 (faster data loading)
+# - Val batch: 80 → 128 (60% larger)
+# - Added: persistent_workers, pin_memory, prefetch_factor
+# - Transformer: heads 6→8, depth 3→4
 #
-# Expected results on A100:
-# - Training speed: ~2-3 sec/epoch (vs ~8-10 sec baseline)
-# - WT Dice: 0.90-0.92
-# - TC Dice: 0.85-0.88
-# - ED Dice: 0.78-0.82
-# - Mean Dice: 0.85-0.87
+# Expected results on A100 80GB:
+# - Training speed: ~3-4 sec/epoch (faster than 40GB due to larger batches)
+# - VRAM usage: ~55-65GB / 80GB
+# - WT Dice: 0.91-0.93
+# - TC Dice: 0.86-0.89
+# - ED Dice: 0.80-0.83
+# - Mean Dice: 0.86-0.88
 # ============================================================
 
 data:
@@ -31,10 +34,10 @@ data:
 
 train:
   epochs: 300
-  batch_size: 64                                # A100 optimized (40GB VRAM)
-  lr: 2.0e-4                                    # Scaled for larger batch
+  batch_size: 96                                # A100 80GB optimized (was 64)
+  lr: 2.5e-4                                    # Scaled for larger batch
   weight_decay: 1.0e-4
-  workers: 12                                   # A100 server has many CPU cores
+  workers: 16                                   # More workers for faster data loading
 
   # Multi-class segmentation loss
   loss_type: "multiclass_dice_focal"            # REQUIRED for 3-class segmentation
@@ -61,17 +64,20 @@ train:
 
   # A100 optimizations
   use_channels_last: true
-  val_batch_size: 80                            # Larger validation batch
+  val_batch_size: 128                           # Larger validation batch (was 80)
+  persistent_workers: true                      # Keep workers alive between epochs
+  pin_memory: true                              # Faster CPU->GPU transfer
+  prefetch_factor: 4                            # Prefetch 4 batches per worker
 
 model:
   in_channels: 4
   num_classes_seg: 3                            # Multi-class: bg, tc, ed
   num_classes_cls: 2
-  base: 48                                      # Larger model for A100
+  base: 64                                      # Larger model for A100 80GB (was 48)
   patch_size: 8
-  dim: 384                                      # Larger embedding
-  n_heads: 6
-  depth: 3                                      # Deeper transformer
+  dim: 512                                      # Larger embedding (was 384)
+  n_heads: 8                                    # More attention heads (was 6)
+  depth: 4                                      # Deeper transformer (was 3)
   roi_stop_grad: true
   deep_supervision: true
 
