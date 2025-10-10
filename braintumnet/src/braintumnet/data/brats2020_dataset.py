@@ -24,8 +24,15 @@ class SliceDataset(Dataset):
         self.img_size = img_size
         self.rotate_deg, self.hflip_p, self.vflip_p = rotate_deg, hflip_p, vflip_p
         self.in_channels = in_channels
-        with open(split_file, "r") as f:
-            self.slice_ids: List[str] = [x.strip() for x in f if x.strip()]
+
+        # Read CSV or TXT split file
+        if split_file.endswith('.csv'):
+            import pandas as pd
+            df = pd.read_csv(split_file)
+            self.slice_ids: List[str] = df['slice_id'].tolist()
+        else:
+            with open(split_file, "r") as f:
+                self.slice_ids: List[str] = [x.strip() for x in f if x.strip()]
 
         # labels
         self.case_label: Dict[str, int] = {}
@@ -51,25 +58,40 @@ class SliceDataset(Dataset):
     def __len__(self): return len(self.slice_ids)
 
     def _load_image(self, sid: str):
-        # Try multi-modal (.npy) first, then single-modal (.png)
-        npy_path = os.path.join(self.proc_root, "images", f"{sid}.npy")
-        png_path = os.path.join(self.proc_root, "images", f"{sid}.png")
+        # Check for multi-modal structure (flair/, t1/, t1ce/, t2/ folders)
+        flair_path = os.path.join(self.proc_root, "flair", f"{sid}.png")
+        t1_path = os.path.join(self.proc_root, "t1", f"{sid}.png")
+        t1ce_path = os.path.join(self.proc_root, "t1ce", f"{sid}.png")
+        t2_path = os.path.join(self.proc_root, "t2", f"{sid}.png")
 
-        if os.path.exists(npy_path):
-            # Multi-modal: Load 4-channel numpy array
-            img_array = np.load(npy_path)  # Shape: (H, W, 4)
+        if all(os.path.exists(p) for p in [flair_path, t1_path, t1ce_path, t2_path]):
+            # Multi-modal: Load all 4 modalities and stack
+            flair = np.array(Image.open(flair_path).convert("L"))
+            t1 = np.array(Image.open(t1_path).convert("L"))
+            t1ce = np.array(Image.open(t1ce_path).convert("L"))
+            t2 = np.array(Image.open(t2_path).convert("L"))
+            # Stack to (H, W, 4)
+            img_array = np.stack([flair, t1, t1ce, t2], axis=-1)
             return img_array
-        elif os.path.exists(png_path):
-            # Single-modal: Load grayscale PNG
-            return Image.open(png_path).convert("L")
         else:
-            raise FileNotFoundError(f"Neither {npy_path} nor {png_path} found")
+            # Try single-modal fallback
+            png_path = os.path.join(self.proc_root, "images", f"{sid}.png")
+            if os.path.exists(png_path):
+                return Image.open(png_path).convert("L")
+            else:
+                raise FileNotFoundError(f"Multi-modal images not found for {sid}")
 
     def _load_mask(self, sid: str) -> Image.Image:
+        # Try seg/ folder first (multiclass), then masks/ (binary)
+        seg_path = os.path.join(self.proc_root, "seg", f"{sid}.png")
         msk_path = os.path.join(self.proc_root, "masks", f"{sid}.png")
-        if not os.path.exists(msk_path):
-            raise FileNotFoundError(msk_path)
-        return Image.open(msk_path).convert("L")
+
+        if os.path.exists(seg_path):
+            return Image.open(seg_path).convert("L")
+        elif os.path.exists(msk_path):
+            return Image.open(msk_path).convert("L")
+        else:
+            raise FileNotFoundError(f"Mask not found: {seg_path} or {msk_path}")
 
     def __getitem__(self, idx):
         sid = self.slice_ids[idx]
@@ -84,11 +106,11 @@ class SliceDataset(Dataset):
             # NOTE: Multi-modal preprocessing should be done with same resize/pad as single-modal
             img_t = torch.from_numpy(img).permute(2, 0, 1).float()  # (4, H, W)
 
-            # Still need to process mask
-            msk_arr = np.asarray(msk).astype(np.float32)
-            if msk_arr.max() > 1.0:
-                msk_arr /= 255.0
-            msk_t = torch.from_numpy(msk_arr > 0.5).float().unsqueeze(0)  # (1, H, W)
+            # Process mask - keep as class labels (0, 1, 2, ...) not binary
+            msk_arr = np.asarray(msk).astype(np.int64)  # Keep as integer class labels
+            # Mask values are already 0, 1, 2 from preprocessing
+            # No need to threshold or normalize - just convert to tensor
+            msk_t = torch.from_numpy(msk_arr).unsqueeze(0)  # (1, H, W) with integer labels
         else:
             # Single-modal: img is PIL Image
             img_t, msk_t = augment_pair(img, msk, self.img_size, self.rotate_deg, self.hflip_p, self.vflip_p, self.train)

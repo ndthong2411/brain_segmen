@@ -230,14 +230,18 @@ class MultiTaskLoss(nn.Module):
     """
     def __init__(self, seg_w=1.0, cls_w=0.7, boundary_w=0.0,
                  loss_type='dice_ce', pos_weight=None,
-                 focal_alpha=0.25, focal_gamma=2.0):
+                 focal_alpha=0.25, focal_gamma=2.0,
+                 # Multiclass params
+                 num_classes=1, ignore_background=True, class_weights=None):
         super().__init__()
         self.seg_w = seg_w
         self.cls_w = cls_w
         self.boundary_w = boundary_w
         self.loss_type = loss_type
+        self.num_classes = num_classes
 
         # Select segmentation loss based on type
+        # Binary segmentation losses
         if loss_type == 'dice_ce':
             self.seg_loss = DiceCELoss()
         elif loss_type == 'dice_ce_weighted':
@@ -245,9 +249,24 @@ class MultiTaskLoss(nn.Module):
         elif loss_type == 'dice_focal':
             self.seg_loss = DiceFocalLoss(focal_alpha=focal_alpha,
                                          focal_gamma=focal_gamma)
+        # Multiclass segmentation losses
+        elif loss_type == 'multiclass_dice_ce':
+            self.seg_loss = MulticlassDiceCELoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                class_weights=class_weights
+            )
+        elif loss_type == 'multiclass_dice_focal':
+            self.seg_loss = MulticlassDiceFocalLoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                focal_alpha=focal_alpha if isinstance(focal_alpha, list) else [focal_alpha] * num_classes,
+                focal_gamma=focal_gamma
+            )
         else:
             raise ValueError(f"Unknown loss_type: {loss_type}. "
-                           f"Must be 'dice_ce', 'dice_ce_weighted', or 'dice_focal'")
+                           f"Must be 'dice_ce', 'dice_ce_weighted', 'dice_focal', "
+                           f"'multiclass_dice_ce', or 'multiclass_dice_focal'")
 
         self.cls_loss = nn.CrossEntropyLoss()
 
@@ -275,3 +294,203 @@ class MultiTaskLoss(nn.Module):
         total_loss = self.seg_w * l_seg + self.cls_w * l_cls
 
         return total_loss, l_seg.detach(), l_cls.detach()
+
+
+# ============================================================================
+# MULTI-CLASS SEGMENTATION LOSSES (for 3+ class segmentation)
+# ============================================================================
+
+def multiclass_dice_loss(logits, targets, num_classes, ignore_background=True, smooth=1.0):
+    """
+    Multi-class Dice Loss.
+
+    Args:
+        logits: (B, C, H, W) - raw logits from model
+        targets: (B, 1, H, W) - integer class labels [0, C-1]
+        num_classes: Number of classes
+        ignore_background: If True, exclude background (class 0) from loss
+        smooth: Smoothing factor
+
+    Returns:
+        Dice loss (scalar)
+    """
+    # Convert logits to probabilities
+    probs = torch.softmax(logits, dim=1)  # (B, C, H, W)
+
+    # Convert targets to one-hot encoding
+    targets = targets.squeeze(1).long()  # (B, H, W)
+    targets_one_hot = torch.nn.functional.one_hot(targets, num_classes=num_classes)  # (B, H, W, C)
+    targets_one_hot = targets_one_hot.permute(0, 3, 1, 2).float()  # (B, C, H, W)
+
+    # Compute Dice for each class
+    dice_scores = []
+    start_class = 1 if ignore_background else 0
+
+    for c in range(start_class, num_classes):
+        pred_c = probs[:, c, :, :]  # (B, H, W)
+        target_c = targets_one_hot[:, c, :, :]  # (B, H, W)
+
+        intersection = (pred_c * target_c).sum(dim=(1, 2))
+        union = pred_c.sum(dim=(1, 2)) + target_c.sum(dim=(1, 2))
+
+        dice = (2.0 * intersection + smooth) / (union + smooth)
+        dice_scores.append(dice.mean())
+
+    # Average Dice across classes
+    mean_dice = torch.stack(dice_scores).mean()
+    return 1.0 - mean_dice  # Return loss (1 - Dice)
+
+
+class MulticlassDiceCELoss(nn.Module):
+    """
+    Multi-class Dice + CrossEntropy Loss.
+
+    Combines:
+    - Multi-class Dice Loss: Good for overlap, class imbalance
+    - CrossEntropy Loss: Standard multi-class classification loss
+
+    Args:
+        num_classes: Number of segmentation classes
+        ignore_background: If True, exclude background from Dice computation
+        dice_weight: Weight for Dice loss component
+        ce_weight: Weight for CrossEntropy loss component
+        class_weights: Optional class weights for CE loss
+    """
+    def __init__(self, num_classes=3, ignore_background=True,
+                 dice_weight=1.0, ce_weight=1.0, class_weights=None):
+        super().__init__()
+        self.num_classes = num_classes
+        self.ignore_background = ignore_background
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
+
+        # CrossEntropy loss
+        if class_weights is not None:
+            class_weights = torch.tensor(class_weights, dtype=torch.float32)
+            self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
+        else:
+            self.ce_loss = nn.CrossEntropyLoss()
+
+    def forward(self, logits, targets):
+        """
+        Args:
+            logits: (B, C, H, W) - raw logits
+            targets: (B, 1, H, W) - integer class labels
+        """
+        # Dice loss
+        dice = multiclass_dice_loss(logits, targets, self.num_classes,
+                                     self.ignore_background)
+
+        # CE loss
+        targets_ce = targets.squeeze(1).long()  # (B, H, W)
+        ce = self.ce_loss(logits, targets_ce)
+
+        return self.dice_weight * dice + self.ce_weight * ce
+
+
+class MulticlassFocalLoss(nn.Module):
+    """
+    Multi-class Focal Loss.
+
+    Focuses on hard examples by down-weighting easy ones.
+    Good for handling class imbalance and hard boundary pixels.
+
+    Args:
+        num_classes: Number of classes
+        alpha: Class weights (list of length num_classes)
+        gamma: Focusing parameter (higher = more focus on hard examples)
+        ignore_background: If True, set background weight to 0
+    """
+    def __init__(self, num_classes=3, alpha=None, gamma=2.0, ignore_background=True):
+        super().__init__()
+        self.num_classes = num_classes
+        self.gamma = gamma
+
+        # Set alpha (class weights)
+        if alpha is None:
+            alpha = [1.0] * num_classes
+        if ignore_background:
+            alpha[0] = 0.0  # Ignore background
+
+        self.alpha = torch.tensor(alpha, dtype=torch.float32)
+
+    def forward(self, logits, targets):
+        """
+        Args:
+            logits: (B, C, H, W)
+            targets: (B, 1, H, W)
+        """
+        # Move alpha to same device as logits
+        self.alpha = self.alpha.to(logits.device)
+
+        # Get probabilities
+        probs = torch.softmax(logits, dim=1)  # (B, C, H, W)
+
+        # Get targets as class indices
+        targets = targets.squeeze(1).long()  # (B, H, W)
+
+        # Flatten
+        probs = probs.permute(0, 2, 3, 1).reshape(-1, self.num_classes)  # (B*H*W, C)
+        targets = targets.reshape(-1)  # (B*H*W,)
+
+        # Get probabilities of true class
+        pt = probs[torch.arange(len(targets)), targets]  # (B*H*W,)
+
+        # Focal weight
+        focal_weight = (1 - pt) ** self.gamma
+
+        # Class weight
+        alpha_t = self.alpha[targets]
+
+        # CrossEntropy loss
+        ce_loss = torch.nn.functional.cross_entropy(
+            probs, targets, reduction='none'
+        )
+
+        # Combine
+        focal_loss = alpha_t * focal_weight * ce_loss
+
+        return focal_loss.mean()
+
+
+class MulticlassDiceFocalLoss(nn.Module):
+    """
+    Multi-class Dice + Focal Loss (RECOMMENDED for multi-class segmentation).
+
+    Combines:
+    - Multi-class Dice Loss: Good for overlap and class imbalance
+    - Multi-class Focal Loss: Focuses on hard examples
+
+    Args:
+        num_classes: Number of classes
+        ignore_background: If True, exclude background from metrics
+        dice_weight: Weight for Dice component
+        focal_weight: Weight for Focal component
+        focal_alpha: Class weights for focal loss
+        focal_gamma: Focusing parameter
+    """
+    def __init__(self, num_classes=3, ignore_background=True,
+                 dice_weight=1.0, focal_weight=1.0,
+                 focal_alpha=None, focal_gamma=2.0):
+        super().__init__()
+        self.num_classes = num_classes
+        self.ignore_background = ignore_background
+        self.dice_weight = dice_weight
+        self.focal_weight = focal_weight
+
+        self.focal_loss = MulticlassFocalLoss(
+            num_classes=num_classes,
+            alpha=focal_alpha,
+            gamma=focal_gamma,
+            ignore_background=ignore_background
+        )
+
+    def forward(self, logits, targets):
+        # Dice loss
+        dice = multiclass_dice_loss(logits, targets, self.num_classes,
+                                     self.ignore_background)
+
+        # Focal loss
+        focal = self.focal_loss(logits, targets)
+
+        return self.dice_weight * dice + self.focal_weight * focal

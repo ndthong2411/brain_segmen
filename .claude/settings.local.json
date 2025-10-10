@@ -7,7 +7,12 @@
       "Bash(dir:*)",
       "Bash(more:*)",
       "Bash(test:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(timeout 60 python scripts/train.py --cfg configs/multiclass.yaml --fold 0)",
+      "Bash(timeout 90 python scripts/train.py --cfg configs/multiclass.yaml --fold 0)",
+      "Bash(timeout 120 python scripts/train.py --cfg configs/multiclass.yaml --fold 0)",
+      "Bash(timeout 120 python scripts/train.py --cfg configs/multiclass.yaml --fold 2)",
+      "Bash(timeout 60 tail -f e:thongcodebrain_segmenbraintumnetlogsbraintumnet_multiclass_3class_fold2.log)"
     ],
     "deny": [],
     "ask": []

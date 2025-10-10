@@ -3,9 +3,19 @@ from .seg_unet import SegUNetMasked
 from .t_inception import TInceptionNet
 
 class BrainTumNet(nn.Module):
-    def __init__(self, in_ch=1, num_cls=2, base=32, dim=256, patch=8, depth=2, n_heads=4, roi_stop_grad=True, deep_supervision=False):
+    def __init__(self, in_ch=1, num_cls=2, base=32, dim=256, patch=8, depth=2, n_heads=4,
+                 roi_stop_grad=True, deep_supervision=False, num_classes_seg=1):
+        """
+        Args:
+            num_classes_seg: Number of segmentation classes
+                            1 = binary (tumor vs background)
+                            3 = multi-class (background, TC, ED)
+        """
         super().__init__()
-        self.seg = SegUNetMasked(in_ch=in_ch, base=base, dim=dim, patch=patch, depth=depth, n_heads=n_heads, deep_supervision=deep_supervision)
+        self.num_classes_seg = num_classes_seg
+        self.seg = SegUNetMasked(in_ch=in_ch, base=base, dim=dim, patch=patch, depth=depth,
+                                n_heads=n_heads, deep_supervision=deep_supervision,
+                                num_classes=num_classes_seg)
         self.roi_stop_grad = roi_stop_grad
         self.deep_supervision = deep_supervision
         # classifier consumes ROI gated image (1-ch). If in_ch>1, we can reduce via 1x1 conv or mean.
@@ -22,7 +32,16 @@ class BrainTumNet(nn.Module):
             seg_logits = seg_output
             aux_outputs = None
 
-        seg_prob = torch.sigmoid(seg_logits)
+        # ROI computation: for multi-class, use Whole Tumor (sum of all tumor classes)
+        if self.num_classes_seg == 1:
+            # Binary: use sigmoid
+            seg_prob = torch.sigmoid(seg_logits)
+        else:
+            # Multi-class: use softmax and sum tumor classes (exclude background class 0)
+            seg_prob = torch.softmax(seg_logits, dim=1)  # (B, C, H, W)
+            # Whole Tumor = sum of all tumor classes (classes 1, 2, ...)
+            seg_prob = seg_prob[:, 1:, :, :].sum(dim=1, keepdim=True)  # (B, 1, H, W)
+
         roi_input = self.reduce(x)
 
         if self.roi_stop_grad:

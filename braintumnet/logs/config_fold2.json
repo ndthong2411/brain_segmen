@@ -1,8 +1,8 @@
 {
-  "exp_name": "braintumnet_full_multimodal",
+  "exp_name": "braintumnet_multiclass_3class",
   "data": {
     "raw_root": "data/raw",
-    "proc_root": "data/processed_full_multimodal",
+    "proc_root": "data/processed_multiclass",
     "modality": "multi",
     "img_size": 256,
     "slices_per_case": 30,
@@ -11,29 +11,41 @@
     "fold": 2
   },
   "train": {
-    "epochs": 150,
+    "epochs": 250,
     "batch_size": 12,
-    "lr": 0.00015,
+    "lr": 0.0001,
     "weight_decay": 0.0001,
     "workers": 4,
+    "loss_type": "multiclass_dice_focal",
     "seg_loss_weight": 1.0,
     "cls_loss_weight": 0.5,
-    "scheduler": "plateau",
+    "dice_weight": 1.0,
+    "focal_weight": 1.0,
+    "focal_alpha": [
+      0.5,
+      0.3,
+      0.2
+    ],
+    "focal_gamma": 2.0,
+    "ignore_background": true,
+    "class_weights": null,
+    "scheduler": "cosine",
     "amp": true,
-    "early_stop_patience": 30,
-    "warmup_steps": 500,
+    "early_stop_patience": 50,
+    "warmup_steps": 1000,
     "min_lr": 1e-06
   },
   "model": {
     "in_channels": 4,
-    "num_classes_seg": 1,
+    "num_classes_seg": 3,
     "num_classes_cls": 2,
     "base": 32,
     "patch_size": 8,
     "dim": 256,
     "n_heads": 4,
     "depth": 2,
-    "roi_stop_grad": true
+    "roi_stop_grad": true,
+    "deep_supervision": true
   },
   "augment": {
     "rotate_deg": 20,
@@ -44,6 +56,8 @@
     "out_dir": "runs",
     "save_dir": "checkpoints",
     "log_dir": "logs",
-    "use_tensorboard": true
+    "use_tensorboard": true,
+    "log_every_n_steps": 50,
+    "save_top_k": 3
   }
 }

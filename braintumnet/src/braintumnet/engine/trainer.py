@@ -10,6 +10,7 @@ from ..utils.io import ensure_dir, save_ckpt, save_training_state
 from ..utils.logger import TrainingLogger
 from ..utils.metrics_logger import MetricsLogger
 from ..metrics import compute_intersection_union
+from ..multiclass_metrics import MulticlassMetricsAccumulator, get_multiclass_predictions, visualize_multiclass_prediction
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -37,8 +38,8 @@ def _cosine_lr_with_warmup(optimizer, base_lr, t, T, warmup_steps=500, min_lr=1e
 def build_dataloaders(cfg: Dict, fold: int):
     proc = cfg["data"]["proc_root"]
     img_size = cfg["data"]["img_size"]
-    train_list = os.path.join(proc, f"split_train_fold{fold}.txt")
-    val_list   = os.path.join(proc, f"split_val_fold{fold}.txt")
+    train_list = os.path.join(proc, f"train_fold{fold}.csv")
+    val_list   = os.path.join(proc, f"val_fold{fold}.csv")
     train_ds = SliceDataset(proc, train_list, img_size, cfg["augment"]["rotate_deg"],
                             cfg["augment"]["hflip_p"], cfg["augment"]["vflip_p"], True, cfg["model"]["in_channels"])
     val_ds   = SliceDataset(proc, val_list, img_size, 0,0,0, False, cfg["model"]["in_channels"])
@@ -68,7 +69,8 @@ def build_model(cfg: Dict):
     mcfg = cfg["model"]
     return BrainTumNet(in_ch=mcfg["in_channels"], num_cls=mcfg["num_classes_cls"], base=mcfg["base"],
                        dim=mcfg["dim"], patch=mcfg["patch_size"], depth=mcfg["depth"], n_heads=mcfg["n_heads"],
-                       roi_stop_grad=mcfg["roi_stop_grad"], deep_supervision=mcfg.get("deep_supervision", False))
+                       roi_stop_grad=mcfg["roi_stop_grad"], deep_supervision=mcfg.get("deep_supervision", False),
+                       num_classes_seg=mcfg.get("num_classes_seg", 1))
 
 def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: str = None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -119,7 +121,11 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         loss_type=loss_type,
         pos_weight=cfg["train"].get("pos_weight", None),
         focal_alpha=cfg["train"].get("focal_alpha", 0.25),
-        focal_gamma=cfg["train"].get("focal_gamma", 2.0)
+        focal_gamma=cfg["train"].get("focal_gamma", 2.0),
+        # Multiclass params
+        num_classes=cfg["model"].get("num_classes_seg", 1),
+        ignore_background=cfg["train"].get("ignore_background", True),
+        class_weights=cfg["train"].get("class_weights", None)
     )
     logger.info(f"Using loss type: {loss_type}")
     if loss_type == "dice_ce_weighted":
@@ -228,9 +234,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                         # Resize auxiliary output to match mask size
                         aux_resized = F.interpolate(aux_output, size=msk.shape[-2:],
                                                     mode='bilinear', align_corners=False)
-                        # Compute auxiliary loss (only segmentation, no classification)
-                        aux_loss_val = dice_loss_with_logits(aux_resized, msk) + \
-                                       torch.nn.functional.binary_cross_entropy_with_logits(aux_resized, msk)
+                        # Compute auxiliary loss using the same seg_loss as main task
+                        aux_loss_val = crit.seg_loss(aux_resized, msk)
                         # Add weighted auxiliary loss
                         weight = aux_weights[i] if i < len(aux_weights) else 0.125
                         loss = loss + weight * aux_loss_val
@@ -289,7 +294,14 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
         if should_validate:
             model.eval()
-            total_inter, total_union = 0.0, 0.0
+
+            # Initialize multiclass metrics accumulator if num_classes > 1, else use binary
+            num_classes_seg = cfg["model"].get("num_classes_seg", 1)
+            if num_classes_seg > 1:
+                metrics_acc = MulticlassMetricsAccumulator(num_classes=num_classes_seg)
+            else:
+                total_inter, total_union = 0.0, 0.0
+
             acc_m, n = 0.0, 0
             sample_imgs, sample_masks, sample_preds = None, None, None
 
@@ -318,61 +330,110 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     else:
                         seg, cls = model_output
 
-                    # Accumulate intersection and union for global metrics
-                    inter, union = compute_intersection_union(seg, msk)
-                    total_inter += inter
-                    total_union += union
+                    # Accumulate metrics (multiclass or binary)
+                    if num_classes_seg > 1:
+                        metrics_acc.update(seg, msk)
+                    else:
+                        inter, union = compute_intersection_union(seg, msk)
+                        total_inter += inter
+                        total_union += union
 
                     acc_m += (cls.argmax(1)==lab).float().mean().item()
                     n += 1
 
                     # Compute current metrics for progress bar
-                    if HAS_TQDM and total_union > 0:
-                        curr_iou = total_inter / (total_union - total_inter + 1e-6)
-                        curr_dice = (2 * total_inter) / (total_union + 1e-6)
-                        val_pbar.set_postfix({'iou': f'{curr_iou:.4f}', 'dice': f'{curr_dice:.4f}'})
+                    if HAS_TQDM:
+                        if num_classes_seg > 1:
+                            # Show running multiclass metrics
+                            curr_metrics = metrics_acc.get_metrics()
+                            val_pbar.set_postfix({
+                                'WT': f'{curr_metrics["WT_dice"]:.4f}',
+                                'TC': f'{curr_metrics["TC_dice"]:.4f}',
+                                'ED': f'{curr_metrics["ED_dice"]:.4f}'
+                            })
+                        elif total_union > 0:
+                            curr_iou = total_inter / (total_union - total_inter + 1e-6)
+                            curr_dice = (2 * total_inter) / (total_union + 1e-6)
+                            val_pbar.set_postfix({'iou': f'{curr_iou:.4f}', 'dice': f'{curr_dice:.4f}'})
 
                     # Save first batch for visualization
                     if batch_idx == 0 and writer:
                         sample_imgs = img[:4].cpu()
                         sample_masks = msk[:4].cpu()
-                        sample_preds = (seg[:4] > 0.5).float().cpu()
+                        if num_classes_seg > 1:
+                            sample_preds = get_multiclass_predictions(seg[:4]).cpu()
+                        else:
+                            sample_preds = (seg[:4] > 0.5).float().cpu()
 
             # Compute final global metrics
             eps = 1e-6
-            iou_m = total_inter / (total_union - total_inter + eps)
-            dice_m = (2 * total_inter) / (total_union + eps)
+            if num_classes_seg > 1:
+                # Get all multiclass metrics
+                final_metrics = metrics_acc.get_metrics()
+                # Use mean_dice as main metric for checkpointing
+                iou_m = final_metrics['mean_iou']
+                dice_m = final_metrics['mean_dice']
+                # Extract region-specific metrics
+                wt_dice = final_metrics['WT_dice']
+                wt_iou = final_metrics['WT_iou']
+                tc_dice = final_metrics['TC_dice']
+                tc_iou = final_metrics['TC_iou']
+                ed_dice = final_metrics['ED_dice']
+                ed_iou = final_metrics['ED_iou']
+            else:
+                # Binary metrics
+                iou_m = total_inter / (total_union - total_inter + eps)
+                dice_m = (2 * total_inter) / (total_union + eps)
+                wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
             acc_m /= n
         else:
             # Skip validation this epoch
             iou_m = best_iou  # Use previous best
             dice_m = 0.0
             acc_m = 0.0
+            wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
         avg_train_loss = train_loss_sum / len(train_loader)
         epoch_time = time.time() - epoch_start_time
 
         # Log to file logger
-        logger.epoch_end(epoch, cfg["train"]["epochs"], {
+        log_dict = {
             'train_loss': avg_train_loss,
             'val_iou': iou_m,
             'val_dice': dice_m,
             'val_acc': acc_m,
             'lr': opt.param_groups[0]['lr'],
             'time_s': epoch_time
-        }, "SUMMARY")
+        }
+        if num_classes_seg > 1:
+            log_dict.update({
+                'WT_dice': wt_dice, 'WT_iou': wt_iou,
+                'TC_dice': tc_dice, 'TC_iou': tc_iou,
+                'ED_dice': ed_dice, 'ED_iou': ed_iou
+            })
+        logger.epoch_end(epoch, cfg["train"]["epochs"], log_dict, "SUMMARY")
 
         # Log to metrics logger (CSV/JSON)
-        metrics_logger.log_epoch(epoch, {
+        metrics_dict = {
             'train_loss': avg_train_loss,
             'val_iou': iou_m,
             'val_dice': dice_m,
             'val_acc': acc_m,
             'learning_rate': opt.param_groups[0]['lr'],
             'epoch_time_s': epoch_time
-        })
+        }
+        if num_classes_seg > 1:
+            metrics_dict.update({
+                'WT_dice': wt_dice, 'WT_iou': wt_iou,
+                'TC_dice': tc_dice, 'TC_iou': tc_iou,
+                'ED_dice': ed_dice, 'ED_iou': ed_iou
+            })
+        metrics_logger.log_epoch(epoch, metrics_dict)
 
         # Console output
-        print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Val IoU {iou_m:.4f} | Dice {dice_m:.4f} | ClsAcc {acc_m:.4f}")
+        if num_classes_seg > 1:
+            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | ClsAcc {acc_m:.4f}")
+        else:
+            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Val IoU {iou_m:.4f} | Dice {dice_m:.4f} | ClsAcc {acc_m:.4f}")
 
         # Log validation metrics to TensorBoard
         if writer:
@@ -381,13 +442,31 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             writer.add_scalar('val/cls_acc', acc_m, epoch)
             writer.add_scalar('epoch/train_loss', avg_train_loss, epoch)
 
+            # Log multiclass metrics if applicable
+            if num_classes_seg > 1:
+                writer.add_scalar('val/WT_dice', wt_dice, epoch)
+                writer.add_scalar('val/WT_iou', wt_iou, epoch)
+                writer.add_scalar('val/TC_dice', tc_dice, epoch)
+                writer.add_scalar('val/TC_iou', tc_iou, epoch)
+                writer.add_scalar('val/ED_dice', ed_dice, epoch)
+                writer.add_scalar('val/ED_iou', ed_iou, epoch)
+
             # Log sample predictions every 10 epochs
             if sample_imgs is not None and epoch % 10 == 0:
                 import torchvision
                 # Create grid: [input | ground truth | prediction]
                 grid_img = torchvision.utils.make_grid(sample_imgs, nrow=4, normalize=True)
-                grid_mask = torchvision.utils.make_grid(sample_masks, nrow=4)
-                grid_pred = torchvision.utils.make_grid(sample_preds, nrow=4)
+
+                if num_classes_seg > 1:
+                    # Convert multiclass masks to RGB for visualization
+                    grid_mask = visualize_multiclass_prediction(sample_masks.squeeze(1).long())
+                    grid_pred = visualize_multiclass_prediction(sample_preds.long())
+                    grid_mask = torchvision.utils.make_grid(grid_mask, nrow=4)
+                    grid_pred = torchvision.utils.make_grid(grid_pred, nrow=4)
+                else:
+                    grid_mask = torchvision.utils.make_grid(sample_masks, nrow=4)
+                    grid_pred = torchvision.utils.make_grid(sample_preds, nrow=4)
+
                 writer.add_image('samples/input', grid_img, epoch)
                 writer.add_image('samples/ground_truth', grid_mask, epoch)
                 writer.add_image('samples/prediction', grid_pred, epoch)

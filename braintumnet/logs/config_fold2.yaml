@@ -1,47 +1,165 @@
-exp_name: "braintumnet_full_multimodal"
+exp_name: "braintumnet_multiclass_3class"
+
+# MULTI-CLASS SEGMENTATION CONFIGURATION
+# ============================================================
+# Purpose: Train 3-class segmentation to evaluate tumor regions separately
+#
+# Classes:
+#   0: Background
+#   1: Tumor Core (TC) = NCR + ET
+#   2: Edema (ED)
+#
+# Evaluation regions:
+#   - Whole Tumor (WT) = TC + ED (classes 1+2)
+#   - Tumor Core (TC) = class 1 only
+#   - Edema (ED) = class 2 only
+#
+# Why multi-class?
+#   - Avoids background dominance (97% pixels)
+#   - Evaluates tumor regions separately
+#   - More honest metrics (no background inflation)
+#
+# Expected results:
+#   - WT Dice: 0.88-0.90 (vs 0.91 binary - more honest)
+#   - TC Dice: 0.82-0.85
+#   - ED Dice: 0.75-0.80
+# ============================================================
 
 data:
   raw_root: "data/raw"
-  proc_root: "data/processed_full_multimodal"  # Full dataset with 4 modalities
+  proc_root: "data/processed_multiclass"        # Multi-class processed data
   modality: "multi"                             # All 4 modalities: FLAIR, T1, T1CE, T2
   img_size: 256
-  slices_per_case: 30                           # More slices per case (we have full dataset)
-  tumor_slice_ratio: 0.5                        # Balance tumor/non-tumor
+  slices_per_case: 30
+  tumor_slice_ratio: 0.5
   num_folds: 5
   fold: 0
 
 train:
-  epochs: 150                                    # Can train longer with more data
-  batch_size: 12                                 # Reduced for 4-channel input (more GPU memory)
-  lr: 1.5e-4                                     # Slightly lower LR for multi-modal
-  weight_decay: 1.0e-4                           # Strong regularization
+  epochs: 250
+  batch_size: 12
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
   workers: 4
+
+  # Multi-class segmentation loss
+  loss_type: "multiclass_dice_focal"            # Use multiclass version
   seg_loss_weight: 1.0
   cls_loss_weight: 0.5
-  scheduler: "plateau"                           # Adaptive LR scheduling
-  amp: true                                      # CRITICAL for 4-channel input
-  early_stop_patience: 30                        # More patience with larger dataset
-  warmup_steps: 500                              # Warmup for first 500 steps
-  min_lr: 1.0e-6                                 # Minimum LR
+
+  # Multi-class loss hyperparameters
+  dice_weight: 1.0                              # Weight for Dice component (unused, for reference)
+  focal_weight: 1.0                             # Weight for Focal component (unused, for reference)
+  focal_alpha: [0.5, 0.3, 0.2]                  # Class weights [bg, tc, ed]
+  focal_gamma: 2.0                              # Focusing parameter
+  ignore_background: true                       # Ignore background in loss computation
+
+  # Class weights for each tumor class (optional)
+  # If None, uses uniform weights
+  # Format: [bg_weight, tc_weight, ed_weight]
+  class_weights: null                           # or [1.0, 2.0, 1.5] to emphasize TC
+
+  # Scheduler
+  scheduler: "cosine"
+  amp: true
+  early_stop_patience: 50
+  warmup_steps: 1000
+  min_lr: 1.0e-6
 
 model:
-  in_channels: 4                                 # 4 MRI modalities
-  num_classes_seg: 1                             # Binary tumor segmentation
-  num_classes_cls: 2                             # HGG vs LGG classification
-  base: 32                                       # Balanced model size
+  in_channels: 4
+  num_classes_seg: 3                            # CRITICAL: 3 classes (bg, tc, ed)
+  num_classes_cls: 2
+  base: 32
   patch_size: 8
   dim: 256
   n_heads: 4
   depth: 2
-  roi_stop_grad: true                            # Stabilize training
+  roi_stop_grad: true
+  deep_supervision: true                        # Multi-scale auxiliary losses
 
 augment:
-  rotate_deg: 20                                 # Moderate rotation
-  hflip_p: 0.5                                   # Horizontal flip
-  vflip_p: 0.5                                   # Vertical flip
+  rotate_deg: 20
+  hflip_p: 0.5
+  vflip_p: 0.5
 
 logging:
   out_dir: "runs"
   save_dir: "checkpoints"
   log_dir: "logs"
   use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# USAGE
+# ============================================================
+#
+# 1. Preprocess data to multi-class format:
+#    python scripts/preprocess_multiclass.py \
+#      --raw_dir data/raw/BraTS2020 \
+#      --out_dir data/processed_multiclass \
+#      --img_size 256 \
+#      --slices_per_case 30 \
+#      --tumor_ratio 0.5 \
+#      --num_folds 5
+#
+# 2. Train multi-class model:
+#    python scripts/train.py --cfg configs/multiclass.yaml --fold 0
+#
+# 3. Expected output metrics:
+#    - WT_dice: Whole Tumor Dice (TC + ED)
+#    - WT_iou: Whole Tumor IoU
+#    - TC_dice: Tumor Core Dice
+#    - TC_iou: Tumor Core IoU
+#    - ED_dice: Edema Dice
+#    - ED_iou: Edema IoU
+#    - mean_dice: Average of WT, TC, ED Dice
+#    - mean_iou: Average of WT, TC, ED IoU
+#
+# ============================================================
+# LOSS FUNCTION SELECTION
+# ============================================================
+#
+# seg_loss_type options:
+#
+# 1. 'dice' - Multi-class Dice Loss
+#    - Good for: Balanced classes, overlap optimization
+#    - Use when: Class distribution is relatively balanced
+#
+# 2. 'focal' - Multi-class Focal Loss
+#    - Good for: Hard examples, boundary pixels
+#    - Use when: Model struggles with tumor boundaries
+#
+# 3. 'combined' - Dice + Focal Loss (RECOMMENDED)
+#    - Good for: Best of both worlds
+#    - Use when: Want both overlap and hard example focus
+#    - Default: dice_weight=1.0, focal_weight=1.0
+#
+# ============================================================
+# HYPERPARAMETER TUNING GUIDE
+# ============================================================
+#
+# If TC/ED Dice is low (<0.75):
+#   - Increase focal_alpha for that class: [0.5, 0.4, 0.2] → emphasize TC
+#   - Increase focal_gamma: 2.0 → 3.0 → focus more on hard examples
+#   - Add class_weights: [1.0, 2.0, 1.5] → emphasize TC and ED
+#   - Increase epochs: 250 → 300 → more training time
+#
+# If overfitting (train >> val):
+#   - Increase weight_decay: 1e-4 → 5e-4
+#   - Add dropout (requires code change)
+#   - Reduce model size: base 32 → 24, dim 256 → 192
+#   - Early stopping will handle this automatically
+#
+# If training too slow:
+#   - Reduce deep_supervision to false
+#   - Reduce batch_size if memory limited
+#   - Use smaller model: base 32 → 24
+#
+# If WT Dice >> TC/ED Dice (imbalanced learning):
+#   - Increase class_weights for TC/ED: [1.0, 3.0, 2.0]
+#   - Increase focal_gamma: 2.0 → 3.0
+#   - Use loss_type='focal' instead of 'combined'
+#
+# ============================================================

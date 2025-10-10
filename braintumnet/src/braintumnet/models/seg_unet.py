@@ -32,10 +32,17 @@ class DecoderBlock(nn.Module):
         return x
 
 class SegUNetMasked(nn.Module):
-    def __init__(self, in_ch=1, base=32, dim=256, patch=8, depth=2, n_heads=4, deep_supervision=False):
+    def __init__(self, in_ch=1, base=32, dim=256, patch=8, depth=2, n_heads=4, deep_supervision=False, num_classes=1):
+        """
+        Args:
+            num_classes: Number of output classes
+                        1 = binary segmentation (tumor vs background)
+                        3 = multi-class (background, TC, ED)
+        """
         super().__init__()
         self.patch = patch
         self.deep_supervision = deep_supervision
+        self.num_classes = num_classes
 
         self.e1 = EncoderBlock(in_ch, base)
         self.e2 = EncoderBlock(base, base*2)
@@ -51,13 +58,15 @@ class SegUNetMasked(nn.Module):
         self.d3 = DecoderBlock(base*8, base*4)
         self.d2 = DecoderBlock(base*4, base*2)
         self.d1 = DecoderBlock(base*2, base)
-        self.head = nn.Conv2d(base, 1, 1)
+
+        # Head: output num_classes channels (1 for binary, 3 for multi-class)
+        self.head = nn.Conv2d(base, num_classes, 1)
 
         # Deep Supervision: auxiliary segmentation heads at intermediate decoder levels
         if self.deep_supervision:
-            self.aux_head3 = nn.Conv2d(base*4, 1, 1)  # After d3: 64x64 resolution
-            self.aux_head2 = nn.Conv2d(base*2, 1, 1)  # After d2: 128x128 resolution
-            self.aux_head1 = nn.Conv2d(base, 1, 1)    # After d1: 256x256 resolution (same as main head)
+            self.aux_head3 = nn.Conv2d(base*4, num_classes, 1)  # After d3: 64x64 resolution
+            self.aux_head2 = nn.Conv2d(base*2, num_classes, 1)  # After d2: 128x128 resolution
+            self.aux_head1 = nn.Conv2d(base, num_classes, 1)    # After d1: 256x256 resolution (same as main head)
     def forward(self, x):
         s1, x1 = self.e1(x)      # s1: base, H, W
         s2, x2 = self.e2(x1)     # s2: base*2, H/2, W/2
