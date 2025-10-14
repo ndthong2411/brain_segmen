@@ -72,8 +72,9 @@ class MultiClassDiceLoss(nn.Module):
             dice = (2.0 * intersection + 1e-6) / (union + 1e-6)
             dice_loss = 1.0 - dice
 
-            # Apply class weight
-            weighted_loss = dice_loss * self.class_weights[c]
+            # Apply class weight - ensure same device
+            class_weight = self.class_weights[c].to(dice_loss.device)
+            weighted_loss = dice_loss * class_weight
             dice_scores.append(weighted_loss.mean())
 
         # Average across classes
@@ -120,7 +121,7 @@ class MultiClassFocalLoss(nn.Module):
         probs_flat = probs.permute(0, 2, 3, 1).contiguous().view(-1, C)  # (B*H*W, C)
         target_flat = target.view(-1)  # (B*H*W)
 
-        pt = probs_flat[torch.arange(len(target_flat)), target_flat]  # (B*H*W)
+        pt = probs_flat[torch.arange(len(target_flat), device=target_flat.device), target_flat]  # (B*H*W)
 
         # Focal term
         focal_weight = (1 - pt) ** self.gamma
@@ -128,8 +129,8 @@ class MultiClassFocalLoss(nn.Module):
         # Cross entropy
         ce = -torch.log(pt + 1e-7)
 
-        # Alpha weighting
-        alpha_t = self.alpha[target_flat]
+        # Alpha weighting - ensure alpha tensor is on same device as target
+        alpha_t = self.alpha.to(target_flat.device)[target_flat]
 
         # Focal loss
         loss = alpha_t * focal_weight * ce

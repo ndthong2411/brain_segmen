@@ -1,7 +1,7 @@
 #data
 brats2020_data/
 braintumnet/data
-checkpoints/
+braintumnet/checkpoints
 old/
 logs/
 runs/

@@ -1,5 +1,5 @@
 {
-  "exp_name": "braintumnet_multiclass_3class",
+  "exp_name": "braintumnet_phase1_iou_focus",
   "data": {
     "raw_root": "data/raw",
     "proc_root": "data/processed_multiclass",
@@ -11,29 +11,40 @@
     "fold": 4
   },
   "train": {
-    "epochs": 250,
+    "epochs": 300,
     "batch_size": 12,
-    "lr": 0.0001,
-    "weight_decay": 0.0001,
+    "lr": 5e-05,
+    "weight_decay": 5e-05,
     "workers": 4,
-    "loss_type": "multiclass_dice_focal",
+    "loss_type": "ultimate_multitask",
     "seg_loss_weight": 1.0,
     "cls_loss_weight": 0.5,
     "dice_weight": 1.0,
     "focal_weight": 1.0,
+    "iou_weight": 2.0,
+    "boundary_weight": 0.5,
     "focal_alpha": [
-      0.5,
-      0.3,
-      0.2
+      0.0,
+      0.4,
+      0.1
     ],
-    "focal_gamma": 2.0,
+    "focal_gamma": 3.0,
+    "class_weights": [
+      1.0,
+      3.0,
+      2.0
+    ],
     "ignore_background": true,
-    "class_weights": null,
+    "aux_weight": 0.3,
     "scheduler": "cosine",
+    "warmup_steps": 2000,
+    "min_lr": 5e-06,
+    "early_stop_patience": 75,
+    "early_stop_metric": "val_iou",
+    "optimizer": "adamw",
+    "gradient_clip": 1.0,
     "amp": true,
-    "early_stop_patience": 50,
-    "warmup_steps": 1000,
-    "min_lr": 1e-06
+    "amp_dtype": "float16"
   },
   "model": {
     "in_channels": 4,
@@ -48,7 +59,7 @@
     "deep_supervision": true
   },
   "augment": {
-    "rotate_deg": 20,
+    "rotate_deg": 30,
     "hflip_p": 0.5,
     "vflip_p": 0.5
   },

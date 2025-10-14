@@ -1,0 +1,160 @@
+exp_name: "braintumnet_phase1_iou_focus"
+
+# ============================================================
+# PHASE 1: IoU-Focused Loss Functions
+# ============================================================
+# Target: IoU 0.75-0.80 (from baseline 0.7263)
+#
+# Changes from baseline:
+# 1. Added IoU Loss (direct metric optimization)
+# 2. Added Boundary Loss (precise edge segmentation)
+# 3. Combined: Dice + Focal + IoU + Boundary
+# 4. Increased TC class weight (bottleneck class)
+# 5. Increased focal gamma (harder examples)
+# 6. Extended training schedule
+#
+# Expected gains:
+# - IoU Loss: +3-5%
+# - Boundary Loss: +2-4%
+# - Total: +5-7% IoU improvement
+# ============================================================
+
+data:
+  raw_root: "data/raw"
+  proc_root: "data/processed_multiclass"
+  modality: "multi"                      # FLAIR, T1, T1CE, T2
+  img_size: 256
+  slices_per_case: 30
+  tumor_slice_ratio: 0.5
+  num_folds: 5
+  fold: 0
+
+train:
+  epochs: 300                            # Increased from 250
+  batch_size: 12
+  lr: 5.0e-5                             # Lower initial LR for stability
+  weight_decay: 5.0e-5                   # Stronger regularization
+  workers: 4
+
+  # ============================================================
+  # ULTIMATE LOSS: Dice + Focal + IoU + Boundary
+  # ============================================================
+  loss_type: "ultimate_multitask"        # NEW: Ultimate combined loss
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.5
+
+  # Loss component weights
+  dice_weight: 1.0                       # Baseline stability
+  focal_weight: 1.0                      # Hard examples
+  iou_weight: 2.0                        # EMPHASIS: Direct IoU optimization
+  boundary_weight: 0.5                   # NEW: Boundary precision
+
+  # Focal loss hyperparameters
+  # When ignore_background=true, focal_alpha[0] MUST be 0.0 to ignore background
+  focal_alpha: [0.0, 0.4, 0.1]           # [bg=0.0, TC, ED] - Emphasize TC, IGNORE bg
+  focal_gamma: 3.0                       # Increased from 2.0 -> focus on harder examples
+
+  # Class weights for Dice/IoU (background weight ignored when ignore_background=true)
+  class_weights: [1.0, 3.0, 2.0]         # [bg(ignored), TC, ED] - 3x weight on TC (bottleneck)
+
+  ignore_background: true                # Skip background in Dice/IoU, set bg focal_alpha=0
+
+  # Deep supervision
+  aux_weight: 0.3                        # Weight for auxiliary outputs
+
+  # ============================================================
+  # Learning Rate Schedule
+  # ============================================================
+  scheduler: "cosine"
+  warmup_steps: 2000                     # Increased from 1000
+  min_lr: 5.0e-6                         # Increased from 1e-6 (allow more fine-tuning)
+
+  # Early stopping
+  early_stop_patience: 75                # Increased from 50
+  early_stop_metric: "val_iou"           # Monitor IoU directly
+
+  # Optimization
+  optimizer: "adamw"                     # Changed from Adam (better weight decay)
+  gradient_clip: 1.0                     # Prevent exploding gradients
+
+  # Mixed precision
+  amp: true
+  amp_dtype: "float16"
+
+model:
+  in_channels: 4
+  num_classes_seg: 3                     # Background, TC, ED
+  num_classes_cls: 2                     # HGG, LGG
+
+  # Architecture (same as baseline for Phase 1)
+  base: 32
+  patch_size: 8
+  dim: 256
+  n_heads: 4
+  depth: 2
+
+  roi_stop_grad: true
+  deep_supervision: true                 # Multi-scale supervision
+
+augment:
+  rotate_deg: 30                         # Increased from 20
+  hflip_p: 0.5
+  vflip_p: 0.5
+
+logging:
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  log_dir: "logs"
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# USAGE
+# ============================================================
+#
+# 1. Ensure new loss modules are in place:
+#    - src/braintumnet/losses_iou.py
+#    - src/braintumnet/losses_boundary.py
+#    - src/braintumnet/losses_combined.py
+#
+# 2. Update trainer to use new loss:
+#    from braintumnet.losses_combined import create_loss_from_config
+#    loss_fn = create_loss_from_config(cfg)
+#
+# 3. Train Phase 1:
+#    python scripts/train.py --cfg configs/phase1_iou_focus.yaml --fold 4
+#
+# 4. Expected results after Phase 1:
+#    - Mean IoU: 0.75-0.80 (+5-7% from 0.7263 baseline)
+#    - WT IoU: 0.76-0.81
+#    - TC IoU: 0.72-0.77 (improved but still bottleneck)
+#    - ED IoU: 0.77-0.82
+#
+# 5. Monitor training:
+#    tensorboard --logdir=runs
+#
+# 6. Compare with baseline:
+#    - Baseline: checkpoints/braintumnet_best_fold4.pth (IoU 0.7263)
+#    - Phase 1:  checkpoints/v2_phase1_fold4.pth (target 0.75-0.80)
+#
+# ============================================================
+# HYPERPARAMETER TUNING NOTES
+# ============================================================
+#
+# If TC IoU remains low (<0.75):
+#   - Increase class_weights TC: [1.0, 4.0, 2.0]
+#   - Increase focal_alpha TC: [0.5, 0.5, 0.0]
+#   - Increase boundary_weight: 0.5 -> 0.7
+#
+# If training unstable (NaN losses):
+#   - Decrease iou_weight: 2.0 -> 1.5
+#   - Decrease boundary_weight: 0.5 -> 0.3
+#   - Increase gradient_clip: 1.0 -> 0.5
+#
+# If validation worse than training (overfitting):
+#   - Increase weight_decay: 5e-5 -> 1e-4
+#   - Add dropout (requires code change)
+#   - Reduce model size (wait for Phase 2)
+#
+# ============================================================

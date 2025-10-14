@@ -114,20 +114,31 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
     # Setup loss function with class imbalance handling
     loss_type = cfg["train"].get("loss_type", "dice_ce")
-    crit = MultiTaskLoss(
-        seg_w=cfg["train"]["seg_loss_weight"],
-        cls_w=cfg["train"]["cls_loss_weight"],
-        boundary_w=cfg["train"].get("boundary_loss_weight", 0.0),
-        loss_type=loss_type,
-        pos_weight=cfg["train"].get("pos_weight", None),
-        focal_alpha=cfg["train"].get("focal_alpha", 0.25),
-        focal_gamma=cfg["train"].get("focal_gamma", 2.0),
-        # Multiclass params
-        num_classes=cfg["model"].get("num_classes_seg", 1),
-        ignore_background=cfg["train"].get("ignore_background", True),
-        class_weights=cfg["train"].get("class_weights", None)
-    )
-    logger.info(f"Using loss type: {loss_type}")
+
+    # Check if using new Ultimate loss system (Phase 1+)
+    if loss_type in ["ultimate", "ultimate_multitask"]:
+        from ..losses_combined import create_loss_from_config
+        crit = create_loss_from_config(cfg)
+        logger.info(f"Using loss type: {loss_type} (Phase 1+ Ultimate Loss)")
+        logger.info(f"  Loss components: Dice + Focal + IoU + Boundary")
+        logger.info(f"  IoU weight: {cfg['train'].get('iou_weight', 2.0)}")
+        logger.info(f"  Boundary weight: {cfg['train'].get('boundary_weight', 0.5)}")
+    else:
+        # Original loss system (baseline)
+        crit = MultiTaskLoss(
+            seg_w=cfg["train"]["seg_loss_weight"],
+            cls_w=cfg["train"]["cls_loss_weight"],
+            boundary_w=cfg["train"].get("boundary_loss_weight", 0.0),
+            loss_type=loss_type,
+            pos_weight=cfg["train"].get("pos_weight", None),
+            focal_alpha=cfg["train"].get("focal_alpha", 0.25),
+            focal_gamma=cfg["train"].get("focal_gamma", 2.0),
+            # Multiclass params
+            num_classes=cfg["model"].get("num_classes_seg", 1),
+            ignore_background=cfg["train"].get("ignore_background", True),
+            class_weights=cfg["train"].get("class_weights", None)
+        )
+        logger.info(f"Using loss type: {loss_type}")
     if loss_type == "dice_ce_weighted":
         logger.info(f"  Positive class weight: {cfg['train'].get('pos_weight', 'None')}")
     elif loss_type == "dice_focal":
@@ -225,20 +236,28 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     aux_outputs = None
 
                 # Main loss (segmentation + classification)
-                loss, l_seg, l_cls = crit(seg, msk, cls, lab)
+                # Handle both old and new loss formats
+                if loss_type in ["ultimate", "ultimate_multitask"]:
+                    # New loss format: returns (total_loss, loss_dict)
+                    loss, loss_dict = crit(seg, msk, cls, lab, aux_outputs)
+                    l_seg = loss_dict.get('dice', 0.0) + loss_dict.get('focal', 0.0) + loss_dict.get('iou', 0.0) + loss_dict.get('boundary', 0.0)
+                    l_cls = loss_dict.get('cls', 0.0)
+                else:
+                    # Old loss format: returns (total_loss, seg_loss, cls_loss)
+                    loss, l_seg, l_cls = crit(seg, msk, cls, lab)
 
-                # Deep supervision auxiliary losses
-                if aux_outputs is not None:
-                    aux_weights = cfg["train"].get("aux_loss_weights", [0.5, 0.25, 0.125])
-                    for i, aux_output in enumerate(aux_outputs):
-                        # Resize auxiliary output to match mask size
-                        aux_resized = F.interpolate(aux_output, size=msk.shape[-2:],
-                                                    mode='bilinear', align_corners=False)
-                        # Compute auxiliary loss using the same seg_loss as main task
-                        aux_loss_val = crit.seg_loss(aux_resized, msk)
-                        # Add weighted auxiliary loss
-                        weight = aux_weights[i] if i < len(aux_weights) else 0.125
-                        loss = loss + weight * aux_loss_val
+                    # Deep supervision auxiliary losses (only for old loss system)
+                    if aux_outputs is not None:
+                        aux_weights = cfg["train"].get("aux_loss_weights", [0.5, 0.25, 0.125])
+                        for i, aux_output in enumerate(aux_outputs):
+                            # Resize auxiliary output to match mask size
+                            aux_resized = F.interpolate(aux_output, size=msk.shape[-2:],
+                                                        mode='bilinear', align_corners=False)
+                            # Compute auxiliary loss using the same seg_loss as main task
+                            aux_loss_val = crit.seg_loss(aux_resized, msk)
+                            # Add weighted auxiliary loss
+                            weight = aux_weights[i] if i < len(aux_weights) else 0.125
+                            loss = loss + weight * aux_loss_val
 
                 # Gradient accumulation support
                 grad_accum_steps = cfg["train"].get("grad_accum_steps", 1)
@@ -282,8 +301,11 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             if writer and step % log_interval == 0:
                 actual_loss = loss.item() * cfg["train"].get("grad_accum_steps", 1)
                 writer.add_scalar('train/loss_total', actual_loss, step)
-                writer.add_scalar('train/loss_seg', l_seg.item(), step)
-                writer.add_scalar('train/loss_cls', l_cls.item(), step)
+                # Handle both tensor and float types for l_seg and l_cls
+                l_seg_val = l_seg.item() if isinstance(l_seg, torch.Tensor) else l_seg
+                l_cls_val = l_cls.item() if isinstance(l_cls, torch.Tensor) else l_cls
+                writer.add_scalar('train/loss_seg', l_seg_val, step)
+                writer.add_scalar('train/loss_cls', l_cls_val, step)
                 writer.add_scalar('train/lr', opt.param_groups[0]['lr'], step)
 
             step += 1
