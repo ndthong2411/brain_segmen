@@ -45,23 +45,26 @@ def build_dataloaders(cfg: Dict, fold: int):
     val_ds   = SliceDataset(proc, val_list, img_size, 0,0,0, False, cfg["model"]["in_channels"])
 
     # Optimized DataLoader for A100 GPU
+    prefetch_factor = cfg["train"].get("prefetch_factor", 2)
+    pin_memory = cfg["train"].get("pin_memory", True)
+    
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg["train"]["batch_size"],
         shuffle=True,
         num_workers=cfg["train"]["workers"],
-        pin_memory=True,  # Faster CPU->GPU transfer
+        pin_memory=pin_memory,  # Faster CPU->GPU transfer
         persistent_workers=True if cfg["train"]["workers"] > 0 else False,  # Avoid worker recreation overhead
-        prefetch_factor=2 if cfg["train"]["workers"] > 0 else None  # Preload 2 batches per worker
+        prefetch_factor=prefetch_factor if cfg["train"]["workers"] > 0 else None  # Configurable prefetch
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg["train"].get("val_batch_size", cfg["train"]["batch_size"]),  # Can be larger in validation
         shuffle=False,
         num_workers=cfg["train"]["workers"],
-        pin_memory=True,
+        pin_memory=pin_memory,
         persistent_workers=True if cfg["train"]["workers"] > 0 else False,
-        prefetch_factor=2 if cfg["train"]["workers"] > 0 else None
+        prefetch_factor=prefetch_factor if cfg["train"]["workers"] > 0 else None
     )
     return train_loader, val_loader
 
@@ -111,13 +114,33 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     # PyTorch 2.0+ compilation for speedup
     if cfg["train"].get("use_compile", False):
         try:
-            logger.info("Compiling model with torch.compile()...")
-            model = torch.compile(model, mode='max-autotune')
+            compile_mode = cfg["train"].get("compile_mode", "max-autotune")
+            logger.info(f"Compiling model with torch.compile(mode='{compile_mode}')...")
+            model = torch.compile(model, mode=compile_mode)
             logger.info("Model compilation successful")
         except Exception as e:
             logger.warning(f"torch.compile() failed: {e}. Proceeding without compilation.")
 
-    opt = torch.optim.Adam(model.parameters(), lr=cfg["train"]["lr"], weight_decay=cfg["train"]["weight_decay"])
+    # Optimizer setup with A100 optimizations
+    optimizer_type = cfg["train"].get("optimizer", "adam").lower()
+    optimizer_fused = cfg["train"].get("optimizer_fused", False)
+    
+    if optimizer_type == "adamw":
+        opt = torch.optim.AdamW(
+            model.parameters(),
+            lr=cfg["train"]["lr"],
+            weight_decay=cfg["train"]["weight_decay"],
+            fused=optimizer_fused  # A100 optimization
+        )
+        logger.info(f"Using AdamW optimizer (fused={optimizer_fused})")
+    else:
+        opt = torch.optim.Adam(
+            model.parameters(),
+            lr=cfg["train"]["lr"],
+            weight_decay=cfg["train"]["weight_decay"],
+            fused=optimizer_fused  # A100 optimization
+        )
+        logger.info(f"Using Adam optimizer (fused={optimizer_fused})")
 
     # Setup loss function with class imbalance handling
     loss_type = cfg["train"].get("loss_type", "dice_ce")
