@@ -36,17 +36,18 @@ train:
   # ============================================================
   # CRITICAL: DATA LOADING OPTIMIZATION (Fix 4% GPU util)
   # ============================================================
-  workers: 16                            # DOUBLED from 8 - keep GPU fed!
-  prefetch_factor: 4                     # DOUBLED from 2 - preload more
+  workers: 8                             # Reset to 8 (system recommends max 8)
+  prefetch_factor: 6                     # INCREASED to 6 - more aggressive prefetch
+  pin_memory: true                       # Fast CPU->GPU transfer
   
   # ============================================================
   # TRAINING PARAMETERS - A100 Optimized
   # ============================================================
   epochs: 400                            # Extended training for large model
-  batch_size: 32                         # Balanced: memory vs throughput
-  val_batch_size: 64                     # Larger batch for validation (no gradients)
+  batch_size: 24                         # Reduced from 32 for better stability
+  val_batch_size: 48                     # Reduced from 64
   
-  lr: 6.0e-5                             # Scaled for batch_size=32 (sqrt rule)
+  lr: 5.0e-5                             # Adjusted for batch_size=24
   weight_decay: 1.5e-4                   # Regularization
   
   # ============================================================
@@ -54,7 +55,7 @@ train:
   # ============================================================
   channels_last: true                    # ✅ Tensor cores optimization
   cudnn_benchmark: true                  # ✅ Auto-tune CUDA kernels
-  use_compile: true                      # ✅ PyTorch 2.0 compile (20-30% speedup)
+  use_compile: false                     # ⚠️ DISABLED: PyTorch bug with adaptive_max_pool2d
   compile_mode: "max-autotune"           # ✅ Aggressive optimization
   
   # ============================================================
@@ -163,9 +164,12 @@ augment:
 # ============================================================
 logging:
   log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
   exp_name: "braintumnet_phase2_a100_optimized"
-  tensorboard: true
-  save_predictions: true
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
 
 # ============================================================
 # EXPECTED PERFORMANCE - A100 80GB
