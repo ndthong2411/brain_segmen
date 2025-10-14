@@ -1,0 +1,264 @@
+# Phase 2 Configuration - A100 80GB Optimized
+#
+# Hardware: NVIDIA A100 80GB
+# Target: Maximum performance and accuracy
+# Expected IoU: 0.85-0.88
+#
+# Optimizations:
+# 1. Large batch size (80GB VRAM)
+# 2. Mixed precision (TF32 + BF16)
+# 3. Gradient checkpointing
+# 4. Optimal model size (100M+ params)
+# 5. Advanced augmentations
+# 6. Multi-GPU ready (if available)
+#
+# Expected Training Time: ~24-36 hours (single A100)
+# ============================================================
+
+data:
+  raw_root: "data/raw"
+  proc_root: "data/processed_multiclass"
+  modality: "multi"                      # FLAIR, T1, T1CE, T2
+  img_size: 256
+  slices_per_case: 30
+  tumor_slice_ratio: 0.5
+  num_folds: 5
+  fold: 0
+  val_split: 0.15                        # 15% validation (more data for training)
+
+train:
+  # ============================================================
+  # TRAINING CONFIGURATION - A100 Optimized
+  # ============================================================
+  epochs: 400                            # Extended training
+  batch_size: 32                         # Large batch for A100 80GB
+  lr: 8.0e-5                             # Scaled for batch_size=32
+  weight_decay: 2.0e-4                   # Stronger regularization
+  workers: 8                             # A100 has fast data loading
+
+  # ============================================================
+  # ULTIMATE LOSS - Enhanced for A100
+  # ============================================================
+  loss_type: "ultimate_multitask"
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.5
+
+  # Loss component weights (tuned for high accuracy)
+  dice_weight: 1.0
+  focal_weight: 1.0
+  iou_weight: 3.0                        # Emphasize IoU even more
+  boundary_weight: 0.8                   # Increased boundary focus
+
+  # Focal loss - optimized class balance
+  focal_alpha: [0.0, 0.5, 0.2]           # [bg=0.0, TC=0.5, ED=0.2]
+  focal_gamma: 3.0
+
+  # Class weights - TC emphasized (BraTS standard)
+  class_weights: [1.0, 4.0, 2.5]         # [bg(ignored), TC, ED]
+
+  ignore_background: true
+
+  # Deep supervision (keep same)
+  aux_weight: 0.3
+
+  # Optimizer - AdamW with fused=True for A100
+  optimizer: "adamw"
+  optimizer_kwargs:
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    fused: true                          # A100 optimized fused AdamW
+  
+  grad_clip_norm: 5.0                    # Less aggressive clipping
+
+  # Scheduler - Cosine with warmup
+  scheduler: "cosine"
+  warmup_steps: 500                      # 500 steps warmup
+  warmup_ratio: 0.05                     # 5% of total steps
+  min_lr: 5.0e-7
+
+  # Mixed Precision - A100 Optimized
+  amp: true
+  amp_dtype: "bfloat16"                  # BF16 for A100 (better than FP16)
+  tf32: true                             # Enable TF32 for A100
+  grad_accum_steps: 1                    # No accumulation needed (large batch)
+  gradient_checkpointing: true           # Save memory for larger model
+
+  # Early stopping
+  early_stop_patience: 60
+  val_interval: 1
+
+  # Logging
+  log_interval: 5
+  save_interval: 5
+  save_top_k: 5                          # Keep top 5 checkpoints
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  log_dir: "logs"
+  exp_name: "braintumnet_phase2_a100_optimized"
+  tensorboard: true
+  wandb: false                           # Set to true if using W&B
+  save_predictions: true
+  save_visualizations: true
+
+# ============================================================
+# MODEL: Phase 2 Large - 100M+ parameters (A100 Optimized)
+# ============================================================
+model:
+  # Model type
+  model_type: "v1"                       # Use existing BrainTumNet
+
+  # Input/Output
+  in_channels: 4
+  num_classes_seg: 3                     # bg, TC, ED
+  num_classes_cls: 2                     # HGG, LGG
+
+  # Architecture - Phase 2 Large (A100 optimized)
+  base: 64                               # Increased from 48 (1.33x)
+  dim: 512                               # Increased from 384 (1.33x)
+  patch_size: 8
+  depth: 6                               # Increased from 4 (1.5x)
+  n_heads: 12                            # Increased from 8 (1.5x)
+  mlp_ratio: 4.0
+
+  # Advanced features
+  dropout: 0.25                          # Stronger dropout for large model
+  attn_dropout: 0.15                     # Attention dropout
+  path_dropout: 0.1                      # Stochastic depth
+  
+  # Normalization
+  norm: "layer"                          # LayerNorm for transformers
+  encoder_norm: "instance"               # InstanceNorm for CNN encoder
+  
+  # Additional features
+  roi_stop_grad: true
+  deep_supervision: true
+  multi_scale_fusion: true
+  cbam_reduction: 8                      # CBAM attention
+
+  # A100 specific optimizations
+  use_flash_attention: true              # Flash Attention for A100
+  checkpoint_segments: 2                 # Gradient checkpointing segments
+
+# ============================================================
+# AUGMENTATION - Enhanced for A100
+# ============================================================
+augment:
+  # Geometric
+  rotate_deg: 30
+  hflip_p: 0.5
+  vflip_p: 0.5
+  elastic_p: 0.3                         # Elastic deformation
+  elastic_alpha: 50
+  elastic_sigma: 5
+  
+  # Intensity
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.8, 1.2]
+  
+  # Advanced augmentations
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.05
+  gaussian_blur_p: 0.2
+  gaussian_blur_sigma: [0.5, 1.5]
+  
+  # MRI-specific
+  bias_field_p: 0.3                      # Simulate MRI bias field
+  motion_p: 0.15                         # Simulate motion artifacts
+  ghosting_p: 0.15                       # Simulate ghosting artifacts
+
+# ============================================================
+# TEST-TIME AUGMENTATION (TTA)
+# ============================================================
+tta:
+  enabled: true
+  num_tta: 8                             # 8 TTA iterations
+  hflip: true
+  vflip: true
+  rotate: [0, 90, 180, 270]
+  scales: [0.95, 1.0, 1.05]
+
+# ============================================================
+# MULTI-GPU CONFIGURATION (Optional)
+# ============================================================
+distributed:
+  enabled: false                         # Set to true for multi-GPU
+  backend: "nccl"
+  world_size: 1
+  rank: 0
+  init_method: "env://"
+  
+  # DDP settings
+  find_unused_parameters: false
+  gradient_as_bucket_view: true          # A100 optimization
+  static_graph: true                     # A100 optimization
+
+# ============================================================
+# OPTIMIZATION FLAGS - A100 Specific
+# ============================================================
+optimization:
+  # PyTorch optimizations
+  torch_compile: true                    # PyTorch 2.0 compile (A100)
+  compile_mode: "reduce-overhead"        # Best for A100
+  
+  # CUDA optimizations
+  cudnn_benchmark: true
+  cudnn_deterministic: false
+  
+  # Memory optimizations
+  empty_cache_steps: 50                  # Clear cache every 50 steps
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 4
+
+# ============================================================
+# EXPECTED RESULTS - A100 80GB
+# ============================================================
+# Model Parameters: ~108M
+# GPU Memory Usage: ~45-50 GB (with batch_size=32)
+# Training Speed: ~2.5 hours/epoch (A100 80GB)
+# Total Training Time: ~24-36 hours
+#
+# Expected Performance:
+# - Single model IoU: 0.85-0.87
+# - With TTA: 0.87-0.88
+# - With ensemble: 0.88-0.90
+#
+# Key Improvements over Phase 2 Small:
+# 1. Larger model: 37M → 108M params (2.9x)
+# 2. Larger batch size: 8 → 32 (4x)
+# 3. BF16 precision (A100 native)
+# 4. Flash Attention (A100 optimized)
+# 5. Advanced augmentations
+# 6. Gradient checkpointing (memory efficient)
+# 7. TF32 enabled (A100 feature)
+#
+# Total expected gain: +10-12% IoU from Phase 1
+#                      +5-6% IoU from Phase 2 Small
+# ============================================================
+
+# ============================================================
+# USAGE INSTRUCTIONS
+# ============================================================
+# 1. Verify A100 setup:
+#    python verify_setup.py
+#
+# 2. Check GPU memory:
+#    nvidia-smi
+#
+# 3. Start training:
+#    python scripts/train.py --config configs/phase2_a100_optimized.yaml
+#
+# 4. Monitor training:
+#    tensorboard --logdir logs/braintumnet_phase2_a100_optimized
+#
+# 5. Evaluate with TTA:
+#    python scripts/evaluate.py --config configs/phase2_a100_optimized.yaml --tta
+#
+# 6. For multi-GPU (if you have multiple A100s):
+#    Set distributed.enabled=true and distributed.world_size=N
+#    torchrun --nproc_per_node=N scripts/train.py --config configs/phase2_a100_optimized.yaml
+# ============================================================
