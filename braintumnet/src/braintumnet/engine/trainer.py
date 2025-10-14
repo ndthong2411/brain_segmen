@@ -77,8 +77,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
     # Initialize loggers
     log_dir = cfg["logging"].get("log_dir", "logs")
-    logger = TrainingLogger(log_dir, cfg["exp_name"], fold)
-    metrics_logger = MetricsLogger(log_dir, cfg["exp_name"], fold)
+    exp_name = cfg["logging"].get("exp_name", cfg.get("exp_name", "braintumnet"))
+    logger = TrainingLogger(log_dir, exp_name, fold)
+    metrics_logger = MetricsLogger(log_dir, exp_name, fold)
 
     # Save configuration
     if config_path and os.path.exists(config_path):
@@ -92,9 +93,15 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     model = build_model(cfg).to(device)
 
     # A100 Optimizations: channels_last memory format
-    if cfg["train"].get("use_channels_last", False):
+    use_channels_last = cfg["train"].get("channels_last", cfg["train"].get("use_channels_last", False))
+    if use_channels_last:
         model = model.to(memory_format=torch.channels_last)
         logger.info("Using channels_last memory format for A100 optimization")
+
+    # cuDNN benchmark for A100 optimization
+    if cfg["train"].get("cudnn_benchmark", False):
+        torch.backends.cudnn.benchmark = True
+        logger.info("Enabled cuDNN benchmark for A100 optimization")
 
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
@@ -144,7 +151,16 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     elif loss_type == "dice_focal":
         logger.info(f"  Focal alpha: {cfg['train'].get('focal_alpha', 0.25)}, gamma: {cfg['train'].get('focal_gamma', 2.0)}")
 
-    scaler = torch.amp.GradScaler(device='cuda', enabled=cfg["train"].get("amp", False))
+    # Mixed precision setup with dtype support (bfloat16 for A100)
+    use_amp = cfg["train"].get("amp", False)
+    amp_dtype_str = cfg["train"].get("amp_dtype", "float16")
+    amp_dtype = torch.bfloat16 if amp_dtype_str == "bfloat16" else torch.float16
+
+    # GradScaler not needed for bfloat16 (A100)
+    scaler = torch.amp.GradScaler(device='cuda', enabled=(use_amp and amp_dtype == torch.float16))
+
+    if use_amp:
+        logger.info(f"Mixed precision enabled: {amp_dtype_str}")
 
     # Learning rate scheduler setup
     plateau_scheduler = None
@@ -170,7 +186,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     # TensorBoard
     writer = None
     if HAS_TENSORBOARD and cfg["logging"].get("use_tensorboard", True):
-        tb_log_dir = os.path.join(cfg["logging"]["out_dir"], f"{cfg['exp_name']}_fold{fold}")
+        out_dir = cfg["logging"].get("out_dir", "runs")
+        tb_log_dir = os.path.join(out_dir, f"{exp_name}_fold{fold}")
         ensure_dir(tb_log_dir)
         writer = SummaryWriter(tb_log_dir)
         logger.info(f"TensorBoard logging to: {tb_log_dir}")
@@ -222,10 +239,10 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             lab = batch["label"].to(device)
 
             # Convert to channels_last if enabled
-            if cfg["train"].get("use_channels_last", False):
+            if use_channels_last:
                 img = img.to(memory_format=torch.channels_last)
 
-            with torch.amp.autocast(device_type='cuda', enabled=cfg["train"].get("amp", False)):
+            with torch.amp.autocast(device_type='cuda', enabled=use_amp, dtype=amp_dtype):
                 model_output = model(img)
 
                 # Handle deep supervision output
@@ -342,7 +359,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     lab = batch["label"].to(device)
 
                     # Convert to channels_last if enabled
-                    if cfg["train"].get("use_channels_last", False):
+                    if use_channels_last:
                         img = img.to(memory_format=torch.channels_last)
 
                     # Handle deep supervision outputs
