@@ -1,0 +1,309 @@
+# Loss Function Architecture - Visual Diagram
+
+## 📊 Complete Loss Hierarchy
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      TOTAL TRAINING LOSS                                │
+└─────────────────────────────────────────────────────────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+                    ▼                         ▼
+        ┌───────────────────────┐   ┌──────────────────┐
+        │  SEGMENTATION LOSS    │   │ CLASSIFICATION   │
+        │   (weight = 1.0)      │   │  (weight = 0.5)  │
+        └───────────────────────┘   └──────────────────┘
+                    │                         │
+        ┌───────────┴───────────┐             │
+        │                       │             │
+        ▼                       ▼             ▼
+┌──────────────┐      ┌──────────────┐   ┌─────────────┐
+│  MAIN SEG    │      │ AUX SEG      │   │CrossEntropy │
+│ (weight=1.0) │      │(weight=0.3×3)│   │   HGG/LGG   │
+└──────────────┘      └──────────────┘   └─────────────┘
+        │
+        │ UltimateLoss
+        ├──────────────────────┬──────────────────┬──────────────────┐
+        │                      │                  │                  │
+        ▼                      ▼                  ▼                  ▼
+┌──────────────┐     ┌──────────────┐   ┌──────────────┐  ┌──────────────┐
+│  DICE LOSS   │     │ FOCAL LOSS   │   │  IoU LOSS    │  │BOUNDARY LOSS │
+│ (weight=1.0) │     │ (weight=1.0) │   │(weight=2.5)  │  │(weight=0.6)  │
+└──────────────┘     └──────────────┘   └──────────────┘  └──────────────┘
+        │                    │                  │                  │
+        │                    │                  │                  │
+        ▼                    ▼                  ▼                  ▼
+┌──────────────┐     ┌──────────────┐   ┌──────────────┐  ┌──────────────┐
+│Per-class:    │     │Per-pixel:    │   │Per-class:    │  │Boundary:     │
+│              │     │              │   │              │  │              │
+│ TC: 4.0x     │     │ BG: 0.0 ign  │   │ TC: 4.0x     │  │ No class     │
+│ ED: 2.5x     │     │ TC: 0.5x     │   │ ED: 2.5x     │  │ weighting    │
+│              │     │ ED: 0.15x    │   │              │  │              │
+└──────────────┘     └──────────────┘   └──────────────┘  └──────────────┘
+```
+
+---
+
+## 🔢 Numerical Flow (Early Training Example)
+
+```
+INPUT: Logits (B, 3, 256, 256), Target (B, 256, 256)
+   │
+   ├─→ Dice Loss
+   │      ├─→ TC: Dice=0.25 → Loss=0.75 → Weighted=0.75×4.0=3.0
+   │      └─→ ED: Dice=0.35 → Loss=0.65 → Weighted=0.65×2.5=1.625
+   │      └─→ Mean = (3.0 + 1.625)/2 = 2.3125
+   │
+   ├─→ Focal Loss
+   │      ├─→ Hard examples (low confidence): Loss ≈ 2.0
+   │      └─→ (BG ignored with alpha=0.0)
+   │
+   ├─→ IoU Loss (✅ FIXED!)
+   │      ├─→ TC: IoU=0.20 → Loss=0.80 → Weighted=0.80×4.0=3.2
+   │      └─→ ED: IoU=0.30 → Loss=0.70 → Weighted=0.70×2.5=1.75
+   │      └─→ Mean = (3.2 + 1.75)/2 = 2.475
+   │
+   └─→ Boundary Loss
+          └─→ Edge errors: ≈ 3.5
+
+MainSegLoss = 1.0×2.3125 + 1.0×2.0 + 2.5×2.475 + 0.6×3.5
+            = 2.3125 + 2.0 + 6.1875 + 2.1
+            = 12.6
+
+With AuxLoss (3 auxiliary outputs):
+SegLoss = 12.6 + 0.3×(similar)×3 ≈ 23.4
+
+ClassificationLoss = -log(0.8) ≈ 0.22
+
+TOTAL = 23.4 + 0.5×0.22 = 23.51 ✅ POSITIVE
+```
+
+---
+
+## 🔄 Code Flow
+
+```
+1. Config File (phase2_a100.yaml)
+   ┌────────────────────────────────────────┐
+   │ train:                                 │
+   │   loss_type: "ultimate_multitask"     │
+   │   dice_weight: 1.0                    │
+   │   focal_weight: 1.0                   │
+   │   iou_weight: 2.5                     │
+   │   boundary_weight: 0.6                │
+   │   class_weights: [1.0, 4.0, 2.5]      │
+   │   focal_alpha: [0.0, 0.5, 0.15]       │
+   └────────────────────────────────────────┘
+              │
+              ▼
+2. Trainer (trainer.py line 150)
+   ┌────────────────────────────────────────┐
+   │ from losses_combined import \         │
+   │     create_loss_from_config           │
+   │                                        │
+   │ crit = create_loss_from_config(cfg)   │
+   └────────────────────────────────────────┘
+              │
+              ▼
+3. Factory (losses_combined.py line 294)
+   ┌────────────────────────────────────────┐
+   │ if loss_type == 'ultimate_multitask': │
+   │     return UltimateMultiTaskLoss(     │
+   │         seg_loss_weight=1.0,          │
+   │         cls_loss_weight=0.5,          │
+   │         dice_weight=1.0,              │
+   │         focal_weight=1.0,             │
+   │         iou_weight=2.5,               │
+   │         boundary_weight=0.6,          │
+   │         class_weights=[1.0,4.0,2.5],  │
+   │         focal_alpha=[0.0,0.5,0.15]    │
+   │     )                                  │
+   └────────────────────────────────────────┘
+              │
+              ▼
+4. UltimateMultiTaskLoss (losses_combined.py line 137)
+   ┌────────────────────────────────────────┐
+   │ self.seg_loss = UltimateLoss(...)     │
+   │ self.cls_loss = CrossEntropyLoss()    │
+   │                                        │
+   │ def forward(...):                      │
+   │   seg_l, dict = self.seg_loss(...)    │
+   │   cls_l = self.cls_loss(...)          │
+   │   total = seg_l + 0.5*cls_l           │
+   └────────────────────────────────────────┘
+              │
+              ▼
+5. UltimateLoss (losses_combined.py line 25)
+   ┌────────────────────────────────────────┐
+   │ self.dice_loss = MultiClassDiceLoss() │
+   │ self.focal_loss = MultiClassFocalLoss│
+   │ self.iou_loss = MulticlassIoULoss()   │
+   │ self.boundary_loss = BoundaryLoss()   │
+   │                                        │
+   │ def forward(logits, target):          │
+   │   dice_l = self.dice_loss(...)        │
+   │   focal_l = self.focal_loss(...)      │
+   │   iou_l = self.iou_loss(...)  ✅FIX  │
+   │   bound_l = self.boundary_loss(...)   │
+   │                                        │
+   │   total = 1.0*dice + 1.0*focal +      │
+   │           2.5*iou + 0.6*boundary      │
+   └────────────────────────────────────────┘
+              │
+      ┌───────┴───────┬──────────┬──────────┐
+      │               │          │          │
+      ▼               ▼          ▼          ▼
+  ┌────────┐   ┌─────────┐ ┌────────┐ ┌──────────┐
+  │ Dice   │   │ Focal   │ │  IoU   │ │ Boundary │
+  │ Module │   │ Module  │ │ Module │ │  Module  │
+  └────────┘   └─────────┘ └────────┘ └──────────┘
+     │             │           │            │
+losses_multiclass losses_multiclass losses_iou losses_boundary
+    .py              .py          .py         .py
+```
+
+---
+
+## 📦 File Dependencies
+
+```
+trainer.py
+    │
+    ├─ imports ─→ losses_combined.py (create_loss_from_config)
+                       │
+                       ├─ imports ─→ losses_multiclass.py
+                       │                  │
+                       │                  ├─ MultiClassDiceLoss
+                       │                  └─ MultiClassFocalLoss
+                       │
+                       ├─ imports ─→ losses_iou.py
+                       │                  │
+                       │                  ├─ MulticlassIoULoss ✅ FIXED
+                       │                  └─ TverskyLoss
+                       │
+                       └─ imports ─→ losses_boundary.py
+                                          │
+                                          ├─ BoundaryLoss
+                                          └─ HausdorffLoss
+
+Config:
+phase2_a100.yaml ────────────────────────→ trainer.py
+    │                                          │
+    └─ loss parameters ──────────────→ create_loss_from_config()
+```
+
+---
+
+## 🎯 Loss Weight Impact
+
+```
+Component Weights Visualization:
+
+Dice       ████████████████████ 1.0
+Focal      ████████████████████ 1.0
+IoU        ██████████████████████████████████████████████████ 2.5 ⭐
+Boundary   ████████████ 0.6
+
+Class Weights (for Dice & IoU):
+
+BG         (ignored)
+TC         ████████████████████████████████████████████ 4.0 ⭐
+ED         █████████████████████████████ 2.5
+
+Focal Alpha (pixel-level weighting):
+
+BG         (ignored) 0.0
+TC         ██████████████████████████ 0.5 ⭐
+ED         ████████ 0.15
+```
+
+**Interpretation:**
+- **IoU weighted 2.5x** → Optimize for target metric
+- **TC weighted 4.0x** → Focus on hardest class (bottleneck)
+- **Boundary 0.6x** → Don't overwhelm, but precise edges
+
+---
+
+## 🔍 Debug: How Loss is Computed (Step by Step)
+
+```
+Training Loop (trainer.py):
+
+1. Forward Pass
+   ┌────────────────────────────────────┐
+   │ model(img) → (seg, cls, aux)       │
+   │   seg: (B, 3, 256, 256)            │
+   │   cls: (B, 2)                       │
+   │   aux: [(B,3,H,W), ...] × 3        │
+   └────────────────────────────────────┘
+              │
+              ▼
+2. Loss Computation
+   ┌────────────────────────────────────┐
+   │ loss, loss_dict = crit(            │
+   │     seg, mask, cls, label, aux     │
+   │ )                                   │
+   └────────────────────────────────────┘
+              │
+              ▼
+3. Loss Dict Contains
+   ┌────────────────────────────────────┐
+   │ {                                   │
+   │   'dice': 2.31,      ✅            │
+   │   'focal': 2.0,      ✅            │
+   │   'iou': 2.48,       ✅ POSITIVE!  │
+   │   'boundary': 3.5,   ✅            │
+   │   'cls': 0.22,       ✅            │
+   │   'total': 23.51     ✅            │
+   │ }                                   │
+   └────────────────────────────────────┘
+              │
+              ▼
+4. Backward Pass
+   ┌────────────────────────────────────┐
+   │ loss.backward()                     │
+   │   → Gradients flow to all params   │
+   └────────────────────────────────────┘
+              │
+              ▼
+5. Logging (TensorBoard)
+   ┌────────────────────────────────────┐
+   │ writer.add_scalar(                 │
+   │   'train/loss_dice', 2.31, step    │
+   │ )                                   │
+   │ writer.add_scalar(                 │
+   │   'train/loss_iou', 2.48, step     │
+   │ )                                   │
+   │ ...                                 │
+   └────────────────────────────────────┘
+```
+
+---
+
+## 🎓 Summary Cheat Sheet
+
+```
+┌───────────────────────────────────────────────────────────┐
+│ QUICK REFERENCE                                           │
+├───────────────────────────────────────────────────────────┤
+│                                                            │
+│ Loss Type:  ultimate_multitask                            │
+│ Location:   losses_combined.py::UltimateMultiTaskLoss    │
+│                                                            │
+│ Components:                                                │
+│   ✅ Dice Loss     (weight 1.0, class-weighted)          │
+│   ✅ Focal Loss    (weight 1.0, alpha-weighted)          │
+│   ✅ IoU Loss      (weight 2.5, class-weighted) FIXED!   │
+│   ✅ Boundary Loss (weight 0.6)                          │
+│   ✅ CE Loss       (weight 0.5, classification)          │
+│                                                            │
+│ Formula:                                                   │
+│   Total = Seg + 0.5×Cls                                  │
+│   Seg = Dice + Focal + 2.5×IoU + 0.6×Boundary            │
+│                                                            │
+│ Config File: configs/phase2_a100.yaml                     │
+│                                                            │
+│ All components are POSITIVE after fix! ✅                │
+└───────────────────────────────────────────────────────────┘
+```

@@ -2,73 +2,28 @@
 
 **Tổng quan**: Tài liệu này giải thích chi tiết kiến trúc của BrainTumNet, bao gồm tất cả các thành phần model với giải thích từng dòng code và hình ảnh minh họa.
 
-## 🆕 Model Versions
-
-BrainTumNet hiện có **2 phiên bản** với các cải tiến khác nhau:
-
-### Version 1 (Baseline)
-**Files code V1**:
-- `src/braintumnet/models/braintumnet.py` (57 dòng - updated)
+**Các files code chính**:
+- `src/braintumnet/models/braintumnet.py` (43 dòng)
 - `src/braintumnet/models/seg_unet.py` (67 dòng)
 - `src/braintumnet/models/cbam.py` (33 dòng)
 - `src/braintumnet/models/masked_transformer.py` (88 dòng)
 - `src/braintumnet/models/t_inception.py` (51 dòng)
 
-**Features**:
-- Binary segmentation (tumor vs background)
-- BatchNorm, ReLU activations
-- MaxPool downsampling
-- ~14M parameters
-
-### Version 2 (Phase 2 Upgrades) ⭐ NEW
-
-**Additional files V2**:
-- `src/braintumnet/models/seg_unet_v2.py` (322 dòng) ⭐ NEW
-
-**Key improvements**:
-- ✅ **Multi-class segmentation** (3 classes: Background, TC, ED)
-- ✅ **InstanceNorm** instead of BatchNorm (medical imaging standard)
-- ✅ **LeakyReLU** instead of ReLU (better gradients)
-- ✅ **Residual connections** in all blocks
-- ✅ **Strided convolution** instead of MaxPool (learned downsampling)
-- ✅ **Multi-scale fusion** before final head
-- ✅ **Deep supervision** with auxiliary outputs
-- ✅ **Dropout** for regularization (0.15 for large models)
-- ✅ **Larger capacity** options (base=48/64, dim=384/512)
-
-**Parameter counts**:
-- V2 Baseline (V1-like): ~14M parameters
-- V2 Small (Phase 2): ~35M parameters (base=48, dim=384)
-- V2 Large (Phase 2): ~60M parameters (base=64, dim=512)
-
-**Tổng cộng**: 618 dòng code được giải thích chi tiết trong tài liệu này.
+**Tổng cộng**: 282 dòng code được giải thích chi tiết trong tài liệu này.
 
 ---
 
 ## Mục lục
 
-### Core Architecture (V1 & V2)
 1. [Tổng quan kiến trúc](#tổng-quan-kiến-trúc)
 2. [BrainTumNet (Wrapper đa nhiệm vụ)](#braintumnet-wrapper-đa-nhiệm-vụ)
-   - 2a. [Multi-Class Segmentation Support](#multi-class-segmentation-support) ⭐ NEW
-   - 2b. [ROI Gating for Multi-Class](#roi-gating-for-multi-class) ⭐ NEW
-3. [U-Net Segmentation V1 với Transformer](#u-net-segmentation-với-transformer)
+3. [U-Net Segmentation với Transformer](#u-net-segmentation-với-transformer)
 4. [CBAM Attention Mechanism](#cbam-attention-mechanism)
 5. [Adaptive Masked Transformer](#adaptive-masked-transformer)
 6. [Inception Classification Network](#inception-classification-network)
-
-### Version 2 Enhancements ⭐ NEW
-7. [SegUNetV2 - Phase 2 Improvements](#segunetv2-phase-2-improvements)
-   - 7a. [Residual Convolutional Blocks](#residual-convolutional-blocks)
-   - 7b. [Enhanced Encoder & Decoder](#enhanced-encoder--decoder)
-   - 7c. [Multi-Scale Fusion](#multi-scale-fusion)
-   - 7d. [Deep Supervision](#deep-supervision)
-   - 7e. [V2 Full Architecture](#v2-full-architecture)
-
-### Analysis & Guides
-8. [Luồng dữ liệu hoàn chỉnh với Tensor Shapes](#luồng-dữ-liệu-hoàn-chỉnh-với-tensor-shapes)
-9. [Giải thích các quyết định thiết kế](#giải-thích-các-quyết-định-thiết-kế)
-10. [Hướng dẫn chỉnh sửa](#hướng-dẫn-chỉnh-sửa)
+7. [Luồng dữ liệu hoàn chỉnh với Tensor Shapes](#luồng-dữ-liệu-hoàn-chỉnh-với-tensor-shapes)
+8. [Giải thích các quyết định thiết kế](#giải-thích-các-quyết-định-thiết-kế)
+9. [Hướng dẫn chỉnh sửa](#hướng-dẫn-chỉnh-sửa)
 
 ---
 
@@ -296,182 +251,6 @@ seg_logits, cls_logits = model(img)
 print(seg_logits.shape)  # (4, 1, 256, 256) - segmentation masks
 print(cls_logits.shape)  # (4, 2) - classification scores
 ```
-
----
-
-## Multi-Class Segmentation Support
-
-⭐ **NEW in V2**: BrainTumNet now supports **multi-class segmentation** (3 classes) in addition to binary mode.
-
-### Updated Constructor Parameters
-
-```python
-class BrainTumNet(nn.Module):
-    def __init__(self, in_ch=1, num_cls=2, base=32, dim=256, patch=8, depth=2, n_heads=4,
-                 roi_stop_grad=True, deep_supervision=False, num_classes_seg=1):
-        """
-        Args:
-            num_classes_seg: Number of segmentation classes ⭐ NEW
-                            1 = binary (tumor vs background)
-                            3 = multi-class (background, TC, ED)
-            deep_supervision: Use deep supervision (V2 feature) ⭐ NEW
-        """
-```
-
-**Dòng 7-13**: Constructor mới với tham số multi-class
-
-**Tham số mới**:
-- `num_classes_seg=1`: Số lớp segmentation
-  - `1`: Binary segmentation (tumor vs background) - DEFAULT
-  - `3`: Multi-class (Background, Tumor Core, Edema)
-- `deep_supervision=False`: Sử dụng deep supervision hay không
-- `roi_stop_grad=True`: Stop gradient qua ROI gating (như cũ)
-
-### ROI Gating for Multi-Class
-
-⭐ **NEW**: Forward pass xử lý cả binary và multi-class:
-
-```python
-def forward(self, x):
-    seg_output = self.seg(x)
-
-    # Handle deep supervision output
-    if self.deep_supervision:
-        seg_logits, aux_outputs = seg_output  # (B, C, H, W) và [aux3, aux2, aux1]
-    else:
-        seg_logits = seg_output  # (B, C, H, W)
-        aux_outputs = None
-
-    # ROI computation: for multi-class, use Whole Tumor (sum of all tumor classes)
-    if self.num_classes_seg == 1:
-        # Binary: use sigmoid
-        seg_prob = torch.sigmoid(seg_logits)  # (B, 1, H, W)
-    else:
-        # Multi-class: use softmax and sum tumor classes (exclude background class 0)
-        seg_prob = torch.softmax(seg_logits, dim=1)  # (B, 3, H, W)
-        # Whole Tumor = sum of all tumor classes (classes 1, 2)
-        seg_prob = seg_prob[:, 1:, :, :].sum(dim=1, keepdim=True)  # (B, 1, H, W)
-
-    roi_input = self.reduce(x)
-
-    if self.roi_stop_grad:
-        roi = roi_input * seg_prob.detach()
-    else:
-        roi = roi_input * seg_prob
-
-    cls_logits = self.cls_backbone(roi)
-
-    if self.deep_supervision:
-        return seg_logits, cls_logits, aux_outputs
-    return seg_logits, cls_logits
-```
-
-**Dòng 25-56**: Forward pass mới hỗ trợ multi-class
-
-### Phân Tích Chi Tiết
-
-#### Binary Mode (num_classes_seg=1):
-```python
-# Input: (B, 4, 256, 256)
-seg_logits = self.seg(x)    # (B, 1, 256, 256) - binary output
-seg_prob = torch.sigmoid(seg_logits)  # (B, 1, 256, 256) - probabilities
-```
-
-**Output shape**: `(B, 1, H, W)` - Single channel cho tumor probability
-
-#### Multi-Class Mode (num_classes_seg=3):
-```python
-# Input: (B, 4, 256, 256)
-seg_logits = self.seg(x)    # (B, 3, 256, 256) - 3 classes
-seg_prob = torch.softmax(seg_logits, dim=1)  # (B, 3, 256, 256)
-# seg_prob[:, 0] = Background probability
-# seg_prob[:, 1] = Tumor Core probability
-# seg_prob[:, 2] = Edema probability
-
-# For ROI gating, we want Whole Tumor (TC + ED)
-seg_prob_wt = seg_prob[:, 1:, :, :].sum(dim=1, keepdim=True)  # (B, 1, 256, 256)
-```
-
-**Output shape**: `(B, 3, H, W)` - Three channels
-- Channel 0: Background
-- Channel 1: Tumor Core (TC)
-- Channel 2: Edema (ED)
-
-**Tại sao sum tumor classes cho ROI?**
-- Classifier cần biết **toàn bộ vùng tumor** (Whole Tumor = WT)
-- WT = TC + ED (classes 1 và 2)
-- Background (class 0) bị bỏ qua
-- Kết quả: ROI mask bao gồm tất cả tumor regions
-
-### Tensor Shape Examples
-
-**Binary Mode**:
-```
-Input:        (4, 4, 256, 256)  # 4 images, 4 modalities
-              ↓
-Seg U-Net:    (4, 1, 256, 256)  # 1 channel: tumor probability
-              ↓ sigmoid
-Seg Prob:     (4, 1, 256, 256)  # probabilities [0, 1]
-              ↓ ROI gating
-ROI:          (4, 1, 256, 256)  # gated input
-              ↓ Inception
-Cls Logits:   (4, 2)            # HGG vs LGG
-```
-
-**Multi-Class Mode**:
-```
-Input:        (4, 4, 256, 256)  # 4 images, 4 modalities
-              ↓
-Seg U-Net:    (4, 3, 256, 256)  # 3 channels: bg, TC, ED
-              ↓ softmax
-Seg Prob:     (4, 3, 256, 256)  # probabilities [0, 1] sum to 1
-              ↓ sum classes 1,2
-Seg Prob WT:  (4, 1, 256, 256)  # Whole Tumor probability
-              ↓ ROI gating
-ROI:          (4, 1, 256, 256)  # gated input
-              ↓ Inception
-Cls Logits:   (4, 2)            # HGG vs LGG
-```
-
-### Ví Dụ Sử Dụng Multi-Class
-
-```python
-# Multi-class segmentation với V2
-from braintumnet.models.seg_unet_v2 import SegUNetV2
-
-model = BrainTumNet(
-    in_ch=4,              # 4 MRI modalities
-    num_cls=2,            # Binary classification (HGG/LGG)
-    base=48,              # V2 base channels (larger)
-    dim=384,              # V2 transformer dimension
-    patch=8,
-    depth=4,              # V2 depth (deeper)
-    n_heads=8,            # V2 heads (more)
-    num_classes_seg=3,    # ⭐ Multi-class: 3 classes
-    deep_supervision=True, # ⭐ Deep supervision
-)
-
-# Forward pass
-img = torch.randn(4, 4, 256, 256)
-seg_logits, cls_logits, aux_outputs = model(img)
-
-# Shapes
-print(seg_logits.shape)     # (4, 3, 256, 256) - 3 class segmentation
-print(cls_logits.shape)     # (4, 2) - classification scores
-print(len(aux_outputs))     # 3 - auxiliary outputs from d3, d2, d1
-print(aux_outputs[0].shape) # (4, 3, 64, 64) - aux from d3
-```
-
-### Key Differences: Binary vs Multi-Class
-
-| Aspect | Binary (num_classes_seg=1) | Multi-Class (num_classes_seg=3) |
-|--------|----------------------------|----------------------------------|
-| **Output channels** | 1 (tumor probability) | 3 (bg, TC, ED probabilities) |
-| **Activation** | Sigmoid | Softmax |
-| **Loss function** | DiceCELoss or DiceFocalLoss | MultiClassDiceLoss or MultiClassFocalLoss |
-| **ROI computation** | Direct sigmoid output | Sum of tumor classes (1, 2) |
-| **Evaluation metrics** | Dice, IoU for WT | Dice, IoU for WT, TC, ED separately |
-| **Clinical utility** | Tumor location | Tumor sub-regions (TC vs ED) |
 
 ---
 

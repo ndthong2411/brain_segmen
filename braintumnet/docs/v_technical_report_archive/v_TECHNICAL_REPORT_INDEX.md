@@ -2,11 +2,10 @@
 
 > **📖 Báo Cáo Kỹ Thuật Toàn Diện Cho Lập Trình Viên Mới**
 >
-> **Phiên bản**: 2.2.0 ⭐ UPDATED
-> **Cập nhật lần cuối**: 2025-10-15
-> **Tổng tài liệu**: **13,473 dòng** trải dải 11 phần chi tiết (+1,400 dòng)
+> **Phiên bản**: 2.1.0
+> **Cập nhật lần cuối**: 2025-10-08
+> **Tổng tài liệu**: **12,073 dòng** trải dài 10 phần chi tiết
 > **Mục đích**: Giải thích code từng dòng để hiểu, chỉnh sửa và mở rộng BrainTumNet
-> **Mới**: Multi-class segmentation, SegUNetV2 architecture, Phase 2 improvements
 
 ---
 
@@ -24,20 +23,17 @@ Tài liệu này được thiết kế để **bất kỳ ai hoàn toàn mới v
 
 ## 📚 Cấu Trúc Tài Liệu
 
-Báo cáo này chứa **13,473 dòng** tài liệu kỹ thuật chi tiết chia thành **11 phần** (+1 phần mới). **Đọc theo thứ tự để hiểu tốt nhất**:
+Báo cáo này chứa **12,073 dòng** tài liệu kỹ thuật chi tiết chia thành 10 phần. **Đọc theo thứ tự để hiểu tốt nhất**:
 
-### Phần 1: Tổng Quan Dự Án (760 dòng) ⭐ UPDATED
+### Phần 1: Tổng Quan Dự Án (560 dòng)
 - **File**: [[v_01_PROJECT_OVERVIEW]]
 - **Nội dung**:
   - BrainTumNet là gì và tại sao nó tồn tại
-  - **NEW**: Model versions (V1 baseline vs V2 Phase 2 upgrades)
-  - **NEW**: Multi-class segmentation support (3 classes: Background, TC, ED)
   - Nền tảng y khoa: glioma, phân loại WHO, chuỗi MRI (FLAIR, T1, T1CE, T2)
   - Dataset BraTS 2020: 369 bệnh nhân, 22,677 lát cắt đã tiền xử lý
   - Tổng quan kiến trúc với sơ đồ
   - Hiệu suất: Dice 0.9148, IoU 0.8430, HD95 2.73mm
   - Công nghệ: PyTorch 2.0, CUDA, Mixed Precision (AMP)
-  - **NEW**: Phase 2 configurations (phase2_a100.yaml, phase2_small.yaml)
   - Yêu cầu phần cứng và ước tính thời gian huấn luyện
 
 ### Phần 2: Khám Phá Pipeline Dữ Liệu (1,484 dòng)
@@ -53,43 +49,19 @@ Báo cáo này chứa **13,473 dòng** tài liệu kỹ thuật chi tiết chia 
   - **Hướng dẫn chỉnh sửa**: Cách thêm bước tiền xử lý mới, augmentation mới
   - **Sơ đồ luồng dữ liệu**: Từ ổ đĩa đến GPU tensor
 
-### Phần 3: Giải Thích Kiến Trúc Model (2,291 dòng) ⭐ UPDATED
+### Phần 3: Giải Thích Kiến Trúc Model (2,116 dòng)
 - **File**: [[v_03_MODEL_ARCHITECTURE]]
 - **Nội dung**:
-  - **NEW**: Multi-class segmentation support section (175 dòng)
-    - ROI gating for multi-class (sum tumor classes)
-    - Binary vs Multi-class forward pass differences
-    - Tensor shape examples for both modes
-  - **Giải thích từng dòng hoàn chỉnh** của cả 5 file model V1:
-    - `braintumnet.py` (57 dòng - updated) - Wrapper đa nhiệm vụ chính
+  - **Giải thích từng dòng hoàn chỉnh** của cả 5 file model:
+    - `braintumnet.py` (24 dòng) - Wrapper đa nhiệm vụ chính
     - `seg_unet.py` (67 dòng) - U-Net encoder-decoder với transformer
     - `cbam.py` (33 dòng) - Cơ chế attention kênh & không gian
     - `masked_transformer.py` (88 dòng) - Khối transformer masked thích ứng
     - `t_inception.py` (51 dòng) - Mạng phân loại Inception
-  - **Tiến trình tensor shape** qua toàn bộ mạng (binary & multi-class)
-  - **Công thức toán học** giải thích bằng ngôn ngữ đơn giản
-  - **Quyết định thiết kế**: Tại sao mỗi thành phần tồn tại
-  - **Hướng dẫn chỉnh sửa**: Cách thêm SE block, residual connection, deep supervision
-
-### Phần 3a: SegUNetV2 Architecture - Phase 2 Improvements (1,050 dòng) ⭐ NEW
-- **File**: [[v_03a_SEGUNETV2_ARCHITECTURE]]
-- **Nội dung**:
-  - **7 Major Improvements** over V1:
-    - InstanceNorm thay BatchNorm (medical imaging standard)
-    - LeakyReLU thay ReLU (better gradients)
-    - Residual blocks trong tất cả layers (deeper training)
-    - Strided convolution thay MaxPool (learned downsampling)
-    - Multi-scale fusion (combine all decoder levels)
-    - Deep supervision (auxiliary losses)
-    - Dropout regularization (0.15 for large models)
-  - **Enhanced Conv Blocks**: conv_norm_act với flexible normalization
-  - **Residual Convolutional Blocks**: Forward/backward pass explained
-  - **Enhanced Encoder/Decoder**: Integration của tất cả improvements
-  - **Multi-Scale Fusion Module**: Algorithm và implementation
-  - **Deep Supervision**: Loss computation strategy
-  - **3 Model Configurations**: Baseline, Small (35M params), Large (60M params)
-  - **V1 vs V2 Comparison**: Features, performance, trade-offs
-  - **Complete code explanations** với tensor shapes
+  - **Tiến trình tensor shape** qua toàn bộ mạng (vd: B,4,256,256 → B,1,256,256)
+  - **Công thức toán học** giải thích bằng ngôn ngữ đơn giản (attention, softmax, cross-entropy)
+  - **Quyết định thiết kế**: Tại sao mỗi thành phần tồn tại, nó cải thiện gì
+  - **Hướng dẫn chỉnh sửa**: Cách thêm SE block, residual connection, thay đổi độ sâu encoder
 
 ### Phần 4: Hệ Thống Huấn Luyện Bên Trong (1,850 dòng)
 - **File**: [[v_04_TRAINING_SYSTEM]]
@@ -245,20 +217,20 @@ Tập trung vào khía cạnh thực nghiệm:
 
 ### Thống Kê Code Tổng Thể
 ```
-File Python: 31 file (~3,322 dòng code) ⭐ +1 file (seg_unet_v2.py)
-File cấu hình: 2 file YAML (Phase 2: phase2_a100.yaml, phase2_small.yaml)
-Tài liệu: 11 file markdown (13,473 dòng) ⭐ +1 file, +1,400 dòng
-Tổng kích thước dự án: ~16,800 dòng (code + tài liệu)
+File Python: 30 file (~3,000 dòng code)
+File cấu hình: 8 file YAML
+Tài liệu: 10 file markdown (12,073 dòng)
+Tổng kích thước dự án: ~15,000 dòng (code + tài liệu)
 ```
 
 ### Thống Kê Bao Phủ Tài Liệu
 ```
-✅ File model được giải thích: 6/6 (100%) ⭐ +seg_unet_v2.py
+✅ File model được giải thích: 5/5 (100%)
 ✅ File training được giải thích: 3/3 (100%)
 ✅ File dữ liệu được giải thích: 3/3 (100%)
 ✅ File tiện ích được giải thích: 5/5 (100%)
 ✅ File script được giải thích: 9/9 (100%)
-✅ Tổng bao phủ: 31/31 file (100%)
+✅ Tổng bao phủ: 30/30 file (100%)
 ```
 
 ### File Code Theo Danh Mục
@@ -279,20 +251,17 @@ scripts/
 
 **Bao phủ tài liệu**: Tất cả script được giải thích trong Phần 2, 4, 5
 
-#### 2. Package Cốt Lõi (Model) - 6 file ⭐ UPDATED
+#### 2. Package Cốt Lõi (Model) - 5 file
 ```
 src/braintumnet/models/
-├── braintumnet.py            [57 dòng]   - Wrapper model đa nhiệm vụ chính (updated)
-├── seg_unet.py               [67 dòng]   - U-Net V1 với attention + transformer
-├── seg_unet_v2.py            [322 dòng]  - U-Net V2 Phase 2 improvements ⭐ NEW
+├── braintumnet.py            [24 dòng]   - Wrapper model đa nhiệm vụ chính
+├── seg_unet.py               [67 dòng]   - U-Net với attention + transformer
 ├── cbam.py                   [33 dòng]   - Cơ chế attention CBAM
 ├── masked_transformer.py     [88 dòng]   - Transformer masked thích ứng
 └── t_inception.py            [51 dòng]   - Mạng phân loại Inception
 ```
 
-**Bao phủ tài liệu**:
-- V1 Models: [[v_03_MODEL_ARCHITECTURE]] (2,291 dòng)
-- V2 Model: [[v_03a_SEGUNETV2_ARCHITECTURE]] (1,050 dòng) ⭐ NEW
+**Bao phủ tài liệu**: Giải thích từng dòng hoàn chỉnh trong [[v_03_MODEL_ARCHITECTURE]] (2,116 dòng)
 
 #### 3. Package Cốt Lõi (Data) - 3 file
 ```
@@ -569,10 +538,9 @@ Sau khi đọc tài liệu này, bạn sẽ hiểu:
 
 | Phần | File | Dòng | Tập trung |
 |------|------|-------|-----------|
-| 1 | [[v_01_PROJECT_OVERVIEW]] | 760 ⭐ | Nền tảng y khoa, dataset, V1/V2, multi-class |
+| 1 | [[v_01_PROJECT_OVERVIEW]] | 560 | Nền tảng y khoa, dataset, kết quả |
 | 2 | [[v_02_DATA_PIPELINE]] | 1,484 | Tiền xử lý, PyTorch Dataset, augmentation |
-| 3 | [[v_03_MODEL_ARCHITECTURE]] | 2,291 ⭐ | V1 models, multi-class support, tensor shapes |
-| 3a | [[v_03a_SEGUNETV2_ARCHITECTURE]] | 1,050 ⭐ | V2 architecture, Phase 2 improvements |
+| 3 | [[v_03_MODEL_ARCHITECTURE]] | 2,116 | Tất cả 5 model từng dòng, tensor shape |
 | 4 | [[v_04_TRAINING_SYSTEM]] | 1,850 | Vòng lặp huấn luyện, loss, metric, checkpoint |
 | 5 | [[v_05_EVALUATION_INFERENCE]] | 1,130 | Đánh giá, dự đoán, TTA, triển khai |
 | 6 | [[v_06_UTILS_LOGGING]] | 1,279 | I/O, logging, TensorBoard, fold validation |
@@ -580,31 +548,11 @@ Sau khi đọc tài liệu này, bạn sẽ hiểu:
 | 8 | [[v_08_RESULTS_ANALYSIS]] | 473 | Kết quả 5-fold, ablation, so sánh |
 | 9 | [[v_09_TROUBLESHOOTING]] | 897 | Lỗi phổ biến, debugging, tối ưu |
 | 10 | [[v_10_EXTENSION_GUIDE]] | 1,090 | Thêm tính năng, model mới, triển khai |
-| **Tổng** | **11 phần** | **13,473** ⭐ | **Bao phủ hoàn chỉnh + V2** |
+| **Tổng** | **10 phần** | **12,073** | **Bao phủ hoàn chỉnh** |
 
 ---
 
-*Tài liệu này đại diện cho ~14 giờ viết kỹ thuật chi tiết để đảm bảo bất kỳ ai cũng có thể hiểu và làm việc với BrainTumNet. Mỗi phần được viết với giải thích code từng dòng và hướng dẫn chỉnh sửa thực tế.*
+*Tài liệu này đại diện cho ~12 giờ viết kỹ thuật chi tiết để đảm bảo bất kỳ ai cũng có thể hiểu và làm việc với BrainTumNet. Mỗi phần được viết với giải thích code từng dòng và hướng dẫn chỉnh sửa thực tế.*
 
-**Xác minh lần cuối**: 2025-10-15 ⭐ UPDATED
-**Tỷ lệ tài liệu-code**: ~4:1 (13,473 dòng tài liệu / 3,322 dòng code)
-
----
-
-## 🆕 What's New in Version 2.2.0 (2025-10-15)
-
-### Major Updates:
-1. ✅ **Multi-Class Segmentation** - Documented 3-class mode (Background, TC, ED)
-2. ✅ **SegUNetV2 Architecture** - Complete documentation của Phase 2 improvements
-3. ✅ **Phase 2 Configurations** - Documented phase2_a100.yaml và phase2_small.yaml
-4. ✅ **V1 vs V2 Comparison** - Comprehensive comparison tables
-
-### New Content:
-- **+1,400 dòng** documentation
-- **+1 file mới**: v_03a_SEGUNETV2_ARCHITECTURE.md
-- **3 files updated**: v_01, v_03, v_TECHNICAL_REPORT_INDEX
-
-### Coverage:
-- Multi-class segmentation: **100%** documented
-- SegUNetV2 architecture: **100%** documented
-- All 31 Python files: **100%** covered
+**Xác minh lần cuối**: 2025-10-08
+**Tỷ lệ tài liệu-code**: ~4:1 (12,073 dòng tài liệu / 3,000 dòng code)

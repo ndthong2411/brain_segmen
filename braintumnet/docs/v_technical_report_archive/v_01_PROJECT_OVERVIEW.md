@@ -31,30 +31,9 @@ BrainTumNet là một **hệ thống AI** nhìn vào hình ảnh MRI não và t�
 
 BrainTumNet là một **framework deep learning** được xây dựng bằng PyTorch thực hiện:
 - **Semantic Segmentation**: Phân loại ở cấp độ pixel để xác định vùng khối u
-  - **Binary mode**: Tumor vs Background (1 class)
-  - **Multi-class mode**: Background, Tumor Core (TC), Edema (ED) (3 classes) ⭐ NEW
-- **Tumor Grade Classification**: Phân biệt giữa Glioma Độ Cao (HGG) và Glioma Độ Thấp (LGG)
+- **Multi-class Classification**: Phân biệt giữa Glioma Độ Cao (HGG) và Glioma Độ Thấp (LGG)
 
 Nó sử dụng cách tiếp cận **multi-task learning** trong đó cả hai nhiệm vụ chia sẻ một encoder chung nhưng có các head riêng biệt cho từng nhiệm vụ.
-
-### Model Versions
-
-**Version 1 (Baseline)**:
-- Original U-Net with CBAM + Transformer
-- BatchNorm, ReLU, MaxPool
-- Binary segmentation
-- ~14M parameters
-
-**Version 2 (Phase 2 Upgrades)** ⭐ NEW:
-- Enhanced U-Net with improvements:
-  - InstanceNorm (medical imaging standard)
-  - LeakyReLU (better gradients)
-  - Residual connections in all blocks
-  - Strided convolution (learned downsampling)
-  - Multi-scale fusion
-  - Deep supervision
-- Both binary and multi-class segmentation
-- Larger capacity options (up to ~60M parameters)
 
 ### Tại Sao "Multi-Task" (Đa Nhiệm Vụ)?
 
@@ -278,36 +257,19 @@ Tổng dữ liệu:
 
 Nhãn BraTS gốc có 4 lớp:
 - Nhãn 0: Nền (não khỏe mạnh)
-- Nhãn 1: Lõi u hoại tử (NCR)
-- Nhãn 2: Phù nề quanh u (ED)
-- Nhãn 4: U tăng cường (ET)
+- Nhãn 1: Lõi u hoại tử
+- Nhãn 2: Phù nề quanh u
+- Nhãn 4: U tăng cường
 
-**BrainTumNet hỗ trợ 2 chế độ**:
-
-#### Mode 1: Binary Segmentation (V1 default)
+**Đơn giản hóa của chúng ta**:
 - Nhãn 0: Nền (không có u)
-- Nhãn 1: Whole Tumor - WT (tất cả vùng u: NCR + ED + ET)
+- Nhãn 1: U (bất kỳ vùng u nào)
 
-**Ưu điểm**:
-- ✅ Dễ học hơn (nhị phân thay vì đa lớp)
-- ✅ Huấn luyện ổn định hơn
-- ✅ Vẫn hữu ích về mặt lâm sàng (biết u ở đâu)
-
-#### Mode 2: Multi-Class Segmentation (V2 supported) ⭐ NEW
-- Nhãn 0: Background
-- Nhãn 1: Tumor Core - TC (NCR + ET combined)
-- Nhãn 2: Edema - ED (peritumoral edema)
-
-**Ưu điểm**:
-- ✅ Phân biệt sub-regions của tumor
-- ✅ Thông tin lâm sàng chi tiết hơn
-- ✅ Phù hợp với BraTS challenge metrics
-- ✅ Hỗ trợ đánh giá WT, TC, ED riêng biệt
-
-**Regions được đánh giá**:
-- **WT (Whole Tumor)** = TC + ED (classes 1, 2)
-- **TC (Tumor Core)** = class 1
-- **ED (Edema)** = class 2
+**Tại sao đơn giản hóa?**
+- Dễ học hơn (nhị phân thay vì 4 lớp)
+- Huấn luyện ổn định hơn
+- Vẫn hữu ích về mặt lâm sàng (biết u ở đâu)
+- Có thể mở rộng sang đa lớp sau này
 
 ### Chiến Lược Chia Dữ Liệu
 
@@ -499,12 +461,11 @@ braintumnet/
 ```
 src/braintumnet/
 ├── models/          # Kiến trúc mạng nơ-ron
-│   ├── braintumnet.py         # Mô hình multi-task chính (V1+V2)
-│   ├── seg_unet.py            # U-Net V1 với attention
-│   ├── seg_unet_v2.py         # U-Net V2 với Phase 2 improvements ⭐ NEW
-│   ├── cbam.py                # Module attention (Channel + Spatial)
-│   ├── masked_transformer.py  # Adaptive Masked Transformer
-│   └── t_inception.py         # Inception Classifier
+│   ├── braintumnet.py      # Mô hình multi-task chính
+│   ├── seg_unet.py         # U-Net với attention
+│   ├── cbam.py            # Module attention
+│   ├── masked_transformer.py  # Transformer
+│   └── t_inception.py     # Classifier
 │
 ├── data/            # Tải và tiền xử lý dữ liệu
 │   ├── brats2020_dataset.py  # PyTorch Dataset
@@ -512,7 +473,7 @@ src/braintumnet/
 │   └── preprocessing.py       # (deprecated)
 │
 ├── engine/          # Huấn luyện và đánh giá
-│   ├── trainer.py   # Vòng lặp huấn luyện (hỗ trợ deep supervision)
+│   ├── trainer.py   # Vòng lặp huấn luyện
 │   └── evaluator.py # Vòng lặp đánh giá
 │
 ├── utils/           # Hàm tiện ích
@@ -521,18 +482,8 @@ src/braintumnet/
 │   ├── metrics_logger.py  # Log CSV/JSON
 │   └── seed.py      # Tái tạo
 │
-├── losses.py               # Hàm loss (Binary + Multi-class)
-│   # - DiceCELoss (binary)
-│   # - FocalLoss (binary) ⭐ NEW
-│   # - BoundaryLoss ⭐ NEW
-│   # - DiceFocalLoss (binary) ⭐ NEW
-│   # - MultiClassDiceLoss ⭐ NEW
-│   # - MultiClassFocalLoss ⭐ NEW
-│   # - MultiClassCombinedLoss ⭐ NEW
-│   # - MultiTaskLoss (wrapper for all)
-│
-├── losses_multiclass.py    # Multi-class specific losses ⭐ NEW
-└── metrics.py              # Metric đánh giá
+├── losses.py        # Hàm loss
+└── metrics.py       # Metric đánh giá
 ```
 
 ### Scripts (Điểm Vào)
@@ -550,34 +501,15 @@ scripts/
 
 ### Tệp Cấu Hình
 
-**Phase 2 Configs** (Current) ⭐:
 ```
 configs/
-├── phase2_a100.yaml    # Optimized for A100 GPU (40GB)
-│                       # - SegUNetV2 Large (base=64, dim=512)
-│                       # - Multi-class segmentation (3 classes)
-│                       # - Deep supervision enabled
-│                       # - Batch size 16, mixed precision
-│
-└── phase2_small.yaml   # Compatible with RTX 3090 (24GB)
-                        # - SegUNetV2 Small (base=48, dim=384)
-                        # - Multi-class segmentation (3 classes)
-                        # - Deep supervision enabled
-                        # - Batch size 12, mixed precision
-```
-
-**Legacy Configs** (V1, deprecated):
-```
-configs/legacy/
-├── quick_test.yaml              # 3 epoch (testing)
+├── quick_test.yaml              # 3 epoch (để test)
 ├── default.yaml                 # 250 epoch single-modal
 ├── full_dataset.yaml            # Single-modal T1CE
-├── full_dataset_multimodal.yaml # Multi-modal V1
-├── multimodal.yaml              # Multi-modal settings
-└── optimized.yaml               # Tuned hyperparameters
+├── full_dataset_multimodal.yaml # Multi-modal (TốT NHẤT) ⭐
+├── multimodal.yaml              # Cài đặt multi-modal
+└── optimized.yaml               # Siêu tham số đã điều chỉnh
 ```
-
-**Recommended**: Use `phase2_small.yaml` for most GPUs, `phase2_a100.yaml` for high-end training.
 
 ### Tổ Chức Dữ Liệu
 
