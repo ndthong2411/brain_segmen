@@ -97,11 +97,12 @@ train:
 # ============================================================
 logging:
   log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
   exp_name: "braintumnet_phase2_a100_optimized"
-  tensorboard: true
-  wandb: false                           # Set to true if using W&B
-  save_predictions: true
-  save_visualizations: true
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
 
 # ============================================================
 # MODEL: Phase 2 Large - 100M+ parameters (A100 Optimized)

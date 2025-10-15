@@ -348,6 +348,13 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 writer.add_scalar('train/loss_cls', l_cls_val, step)
                 writer.add_scalar('train/lr', opt.param_groups[0]['lr'], step)
 
+                # Log individual loss components if available (ultimate loss)
+                if loss_type in ["ultimate", "ultimate_multitask"] and 'loss_dict' in locals():
+                    writer.add_scalar('train/loss_dice', loss_dict.get('dice', 0.0), step)
+                    writer.add_scalar('train/loss_focal', loss_dict.get('focal', 0.0), step)
+                    writer.add_scalar('train/loss_iou', loss_dict.get('iou', 0.0), step)
+                    writer.add_scalar('train/loss_boundary', loss_dict.get('boundary', 0.0), step)
+
             step += 1
 
         # Validation (skip if val_interval > 1 and not this epoch)
