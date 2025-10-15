@@ -108,6 +108,14 @@ class UltimateLoss(nn.Module):
         iou_l = self.iou_loss(logits, target)
         boundary_l = self.boundary_loss(logits, target)
 
+        # Debug: Check for negative components (should NEVER be negative)
+        if dice_l < 0 or focal_l < 0 or iou_l < 0 or boundary_l < 0:
+            print(f"⚠️  WARNING: Negative loss component detected!")
+            print(f"  dice_l: {dice_l.item():.6f}")
+            print(f"  focal_l: {focal_l.item():.6f}")
+            print(f"  iou_l: {iou_l.item():.6f}")
+            print(f"  boundary_l: {boundary_l.item():.6f}")
+
         # Weighted combination
         total = (self.dice_weight * dice_l +
                  self.focal_weight * focal_l +
