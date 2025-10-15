@@ -82,18 +82,18 @@ class MulticlassIoULoss(nn.Module):
             # IoU with smoothing
             iou = (intersection + self.smooth) / (union + self.smooth)  # (B,)
 
-            # Apply class weight - ensure same device
-            class_weight = self.class_weights[c].to(iou.device)
-            weighted_iou = iou * class_weight
-            iou_scores.append(weighted_iou.mean())  # Average over batch
+            # Compute loss for this class (1 - IoU)
+            iou_loss_c = 1.0 - iou  # (B,) - loss per sample
+
+            # Apply class weight to LOSS (not IoU)
+            class_weight = self.class_weights[c].to(iou_loss_c.device)
+            weighted_loss = iou_loss_c * class_weight
+            iou_scores.append(weighted_loss.mean())  # Average over batch
 
         # Average across classes
-        mean_iou = torch.stack(iou_scores).mean()
+        loss = torch.stack(iou_scores).mean()
 
-        # IoU loss = 1 - IoU (we want to minimize loss)
-        loss = 1.0 - mean_iou
-
-        return loss
+        return loss  # Already computed as loss, no need for 1 - mean_iou
 
 
 class TverskyLoss(nn.Module):
