@@ -18,7 +18,10 @@
       "Bash(move \"20250114_IMPLEMENTATION_SUMMARY.md\" \"25_01_14_IMPLEMENTATION_SUMMARY.md\")",
       "Bash(move \"20250114_QUICKSTART_PHASE1.md\" \"25_01_14_QUICKSTART_PHASE1.md\")",
       "Bash(timeout:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []
