@@ -1,9 +1,10 @@
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional
 from PIL import Image
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from functools import lru_cache
 from .transforms import augment_pair
 
 class SliceDataset(Dataset):
@@ -18,12 +19,21 @@ class SliceDataset(Dataset):
     """
     def __init__(self, proc_root: str, split_file: str,
                  img_size: int=256, rotate_deg: int=30, hflip_p: float=0.5, vflip_p: float=0.5,
-                 train: bool=True, in_channels: int=1):
+                 train: bool=True, in_channels: int=1, cache_size: int=1000):
         self.proc_root = proc_root
         self.train = train
         self.img_size = img_size
         self.rotate_deg, self.hflip_p, self.vflip_p = rotate_deg, hflip_p, vflip_p
         self.in_channels = in_channels
+        self.cache_size = cache_size
+
+        # Create cached loading functions
+        if cache_size > 0:
+            self._load_image_cached = lru_cache(maxsize=cache_size)(self._load_image_uncached)
+            self._load_mask_cached = lru_cache(maxsize=cache_size)(self._load_mask_uncached)
+        else:
+            self._load_image_cached = self._load_image_uncached
+            self._load_mask_cached = self._load_mask_uncached
 
         # Read CSV or TXT split file
         if split_file.endswith('.csv'):
@@ -57,7 +67,7 @@ class SliceDataset(Dataset):
 
     def __len__(self): return len(self.slice_ids)
 
-    def _load_image(self, sid: str):
+    def _load_image_uncached(self, sid: str):
         # Check for multi-modal structure (flair/, t1/, t1ce/, t2/ folders)
         flair_path = os.path.join(self.proc_root, "flair", f"{sid}.png")
         t1_path = os.path.join(self.proc_root, "t1", f"{sid}.png")
@@ -81,7 +91,7 @@ class SliceDataset(Dataset):
             else:
                 raise FileNotFoundError(f"Multi-modal images not found for {sid}")
 
-    def _load_mask(self, sid: str) -> Image.Image:
+    def _load_mask_uncached(self, sid: str) -> Image.Image:
         # Try seg/ folder first (multiclass), then masks/ (binary)
         seg_path = os.path.join(self.proc_root, "seg", f"{sid}.png")
         msk_path = os.path.join(self.proc_root, "masks", f"{sid}.png")
@@ -95,8 +105,8 @@ class SliceDataset(Dataset):
 
     def __getitem__(self, idx):
         sid = self.slice_ids[idx]
-        img = self._load_image(sid)
-        msk = self._load_mask(sid)
+        img = self._load_image_cached(sid)
+        msk = self._load_mask_cached(sid)
 
         # Check if multi-modal (numpy array) or single-modal (PIL Image)
         if isinstance(img, np.ndarray):

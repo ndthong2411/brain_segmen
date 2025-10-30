@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from typing import Dict
 from ..models.braintumnet import BrainTumNet
-from ..data.brats2020_dataset import SliceDataset
+from ..data.dataset_factory import create_dataset, get_data_root
 from ..losses import MultiTaskLoss, dice_loss_with_logits
 from ..metrics import iou_score, dice_score
 from ..utils.io import ensure_dir, save_ckpt, save_training_state
@@ -36,13 +36,20 @@ def _cosine_lr_with_warmup(optimizer, base_lr, t, T, warmup_steps=500, min_lr=1e
     for pg in optimizer.param_groups: pg["lr"] = lr
 
 def build_dataloaders(cfg: Dict, fold: int):
-    proc = cfg["data"]["proc_root"]
-    img_size = cfg["data"]["img_size"]
-    train_list = os.path.join(proc, f"train_fold{fold}.csv")
-    val_list   = os.path.join(proc, f"val_fold{fold}.csv")
-    train_ds = SliceDataset(proc, train_list, img_size, cfg["augment"]["rotate_deg"],
-                            cfg["augment"]["hflip_p"], cfg["augment"]["vflip_p"], True, cfg["model"]["in_channels"])
-    val_ds   = SliceDataset(proc, val_list, img_size, 0,0,0, False, cfg["model"]["in_channels"])
+    # Get backend type and data root
+    backend = cfg["data"].get("backend", "png")  # Default to PNG for backward compatibility
+    data_root = get_data_root(cfg)
+
+    print(f"\n[DataLoader] Backend: {backend}")
+    print(f"[DataLoader] Data root: {data_root}")
+
+    # Build split file paths
+    train_list = os.path.join(data_root, f"train_fold{fold}.csv")
+    val_list   = os.path.join(data_root, f"val_fold{fold}.csv")
+
+    # Create datasets using factory
+    train_ds = create_dataset(backend, data_root, train_list, cfg, train=True)
+    val_ds   = create_dataset(backend, data_root, val_list, cfg, train=False)
 
     # Optimized DataLoader for A100 GPU
     prefetch_factor = cfg["train"].get("prefetch_factor", 2)
