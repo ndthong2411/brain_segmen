@@ -19,7 +19,7 @@
 
 data:
   raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
-  proc_root: "braintumnet/data/processed_multiclass"
+  proc_root: "braintumnet/data/processed_multiclass_full"
   modality: "multi"                      # FLAIR, T1, T1CE, T2
   img_size: 256
   slices_per_case: 30

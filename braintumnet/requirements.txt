@@ -11,3 +11,4 @@ tqdm>=4.66
 h5py>=3.8
 matplotlib>=3.7
 tensorboard>=2.13
+pydicom>=2.3.0
