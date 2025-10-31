@@ -23,8 +23,8 @@ data:
 
   # Data paths
   raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
-  proc_root: "braintumnet/data/processed_multiclass_with_grades"  # PNG files (for reference)
-  lmdb_root: "braintumnet/data/lmdb_multiclass_with_grades"       # LMDB database
+  proc_root: "braintumnet/data/processed_multiclass_full"         # PNG files (for reference)
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"    # LMDB database
 
   # Data config
   modality: "multi"
@@ -58,7 +58,7 @@ train:
   dice_weight: 1.0
   focal_weight: 1.0
   iou_weight: 2.5
-  boundary_weight: 0.6
+  boundary_weight: 0.0                   # DISABLED: Causes segfault with workers
 
   # Focal loss
   focal_alpha: [0.0, 0.4, 0.3]           # [bg, TC, ED]

@@ -42,20 +42,23 @@ class LMDBDataset(Dataset):
         self.rotate_deg, self.hflip_p, self.vflip_p = rotate_deg, hflip_p, vflip_p
         self.in_channels = in_channels
 
-        # Open LMDB environment (read-only, no lock)
-        self.env = lmdb.open(
+        # Delay LMDB environment creation (lazy init in __getitem__)
+        # This is required for Windows multiprocessing (Environment objects can't be pickled)
+        self.env = None
+
+        # Load metadata from a temporary environment
+        env_temp = lmdb.open(
             lmdb_root,
             readonly=True,
             lock=False,
-            readahead=True,  # Enable OS-level readahead
+            readahead=False,
             meminit=False
         )
-
-        # Load metadata
-        with self.env.begin() as txn:
+        with env_temp.begin() as txn:
             metadata = pickle.loads(txn.get(b'__metadata__'))
             self.num_samples = metadata['num_samples']
             self.all_slice_ids = metadata['slice_ids']
+        env_temp.close()
 
         # Read split file to get slice IDs for this split
         if split_file.endswith('.csv'):
@@ -97,6 +100,16 @@ class LMDBDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, idx):
+        # Lazy initialization of LMDB environment (required for Windows multiprocessing)
+        if self.env is None:
+            self.env = lmdb.open(
+                self.lmdb_root,
+                readonly=True,
+                lock=False,
+                readahead=True,  # Enable OS-level readahead
+                meminit=False
+            )
+
         # Get LMDB index
         lmdb_idx = self.indices[idx]
 
