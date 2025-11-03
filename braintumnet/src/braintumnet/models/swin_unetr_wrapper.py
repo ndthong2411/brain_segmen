@@ -68,20 +68,41 @@ class SwinUNETRWrapper(nn.Module):
         self.num_classes_seg = num_classes_seg
 
         # Swin-UNETR segmentation network
-        self.seg = SwinUNETR(
-            img_size=(img_size, img_size),
-            spatial_dims=2,  # 2D mode for slice-based segmentation
-            in_channels=in_ch,
-            out_channels=num_classes_seg,
-            feature_size=feature_size,
-            depths=depths,
-            num_heads=num_heads,
-            use_checkpoint=use_checkpoint,  # Gradient checkpointing
-            drop_rate=drop_rate,
-            attn_drop_rate=attn_drop_rate,
-            dropout_path_rate=dropout_path_rate,
-            norm_name="instance",
-        )
+        # Note: img_size parameter was deprecated in MONAI 1.3 and removed in later versions
+        # We try to use it for backwards compatibility, but fall back to omitting it
+        try:
+            self.seg = SwinUNETR(
+                img_size=(img_size, img_size),
+                spatial_dims=2,  # 2D mode for slice-based segmentation
+                in_channels=in_ch,
+                out_channels=num_classes_seg,
+                feature_size=feature_size,
+                depths=depths,
+                num_heads=num_heads,
+                use_checkpoint=use_checkpoint,  # Gradient checkpointing
+                drop_rate=drop_rate,
+                attn_drop_rate=attn_drop_rate,
+                dropout_path_rate=dropout_path_rate,
+                norm_name="instance",
+            )
+        except TypeError as e:
+            # If img_size is not accepted (MONAI >= 1.5), create without it
+            if "img_size" in str(e):
+                self.seg = SwinUNETR(
+                    spatial_dims=2,  # 2D mode for slice-based segmentation
+                    in_channels=in_ch,
+                    out_channels=num_classes_seg,
+                    feature_size=feature_size,
+                    depths=depths,
+                    num_heads=num_heads,
+                    use_checkpoint=use_checkpoint,  # Gradient checkpointing
+                    drop_rate=drop_rate,
+                    attn_drop_rate=attn_drop_rate,
+                    dropout_path_rate=dropout_path_rate,
+                    norm_name="instance",
+                )
+            else:
+                raise
 
     def forward(self, x):
         """
@@ -113,7 +134,10 @@ if __name__ == "__main__":
     if not MONAI_AVAILABLE:
         print("MONAI not available, skipping test")
     else:
-        # Create model
+        import monai
+        print(f"MONAI version: {monai.__version__}")
+        
+        # Create model (compatible with MONAI 1.3+ including versions where img_size is removed)
         model = SwinUNETRWrapper(
             in_ch=4,
             num_classes_seg=3,

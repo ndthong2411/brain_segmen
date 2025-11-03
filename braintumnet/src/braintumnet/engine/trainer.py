@@ -274,10 +274,19 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 model_output = model(img)
 
                 # Handle deep supervision output
-                if cfg["model"].get("deep_supervision", False):
-                    seg, cls, aux_outputs = model_output  # seg: main output, aux_outputs: [aux3, aux2, aux1]
+                # Check if model actually returns 3 values (seg, cls, aux_outputs)
+                if isinstance(model_output, tuple):
+                    if len(model_output) == 3:
+                        seg, cls, aux_outputs = model_output
+                    elif len(model_output) == 2:
+                        seg, cls = model_output
+                        aux_outputs = None
+                    else:
+                        raise ValueError(f"Unexpected model output format: {len(model_output)} values")
                 else:
-                    seg, cls = model_output
+                    # Single output (only segmentation)
+                    seg = model_output
+                    cls = None
                     aux_outputs = None
 
                 # Main loss (segmentation + classification)

@@ -1,5 +1,10 @@
 import os, argparse, sys
 from pathlib import Path
+
+# Tắt TensorFlow warnings khi dùng TensorBoard
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Chỉ hiện errors
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Tắt oneDNN messages
+
 ROOT = Path(__file__).resolve().parents[1]  # braintumnet/
 sys.path.append(str(ROOT / "src"))
 

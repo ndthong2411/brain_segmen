@@ -31,8 +31,33 @@ class FocalLoss(nn.Module):
     """
     def __init__(self, alpha=0.25, gamma=2.0):
         super().__init__()
-        self.alpha = alpha
+        self.alpha_pos, self.alpha_neg = self._parse_alpha(alpha)
         self.gamma = gamma
+
+    @staticmethod
+    def _parse_alpha(alpha):
+        """Normalize incoming alpha weights to (pos_alpha, neg_alpha) floats."""
+        if isinstance(alpha, torch.Tensor):
+            values = alpha.detach().cpu().flatten().tolist()
+        elif isinstance(alpha, (list, tuple)):
+            values = [float(a) for a in alpha]
+        else:
+            pos_alpha = float(alpha)
+            return pos_alpha, 1.0 - pos_alpha
+
+        if not values:
+            raise ValueError("alpha must contain at least one value")
+
+        if len(values) == 1:
+            pos_alpha = values[0]
+            return pos_alpha, 1.0 - pos_alpha
+
+        neg_alpha = values[0]
+        pos_components = values[1:]
+        if not pos_components:
+            raise ValueError("alpha list must include at least one positive-class weight")
+        pos_alpha = float(sum(pos_components) / len(pos_components))
+        return pos_alpha, float(neg_alpha)
 
     def forward(self, logits, target):
         """
@@ -51,7 +76,9 @@ class FocalLoss(nn.Module):
         pt = torch.where(target == 1, probs, 1 - probs)
 
         # Alpha weighting
-        alpha_t = torch.where(target == 1, self.alpha, 1 - self.alpha)
+        alpha_pos = logits.new_tensor(self.alpha_pos)
+        alpha_neg = logits.new_tensor(self.alpha_neg)
+        alpha_t = torch.where(target == 1, alpha_pos, alpha_neg)
 
         # Focal term: (1-pt)^gamma
         focal_weight = (1 - pt) ** self.gamma

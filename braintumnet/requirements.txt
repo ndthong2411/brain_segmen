@@ -12,3 +12,11 @@ h5py>=3.8
 matplotlib>=3.7
 tensorboard>=2.13
 pydicom>=2.3.0
+
+# SOTA Model Dependencies
+monai>=1.3.0          # For Swin-UNETR and UNETR
+einops>=0.7.0         # Required by MONAI transformers
+lmdb>=1.4.0           # For fast data loading backend
+
+# Optional but recommended
+opencv-python>=4.8.0  # For advanced augmentations
