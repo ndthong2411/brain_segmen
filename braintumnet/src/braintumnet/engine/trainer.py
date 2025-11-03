@@ -158,6 +158,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         logger.info(f"  Loss components: Dice + Focal + IoU + Boundary")
         logger.info(f"  IoU weight: {cfg['train'].get('iou_weight', 2.0)}")
         logger.info(f"  Boundary weight: {cfg['train'].get('boundary_weight', 0.5)}")
+        effective_loss = loss_type
     else:
         # Original loss system (baseline)
         crit = MultiTaskLoss(
@@ -173,11 +174,20 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             ignore_background=cfg["train"].get("ignore_background", True),
             class_weights=cfg["train"].get("class_weights", None)
         )
-        logger.info(f"Using loss type: {loss_type}")
-    if loss_type == "dice_ce_weighted":
-        logger.info(f"  Positive class weight: {cfg['train'].get('pos_weight', 'None')}")
-    elif loss_type == "dice_focal":
-        logger.info(f"  Focal alpha: {cfg['train'].get('focal_alpha', 0.25)}, gamma: {cfg['train'].get('focal_gamma', 2.0)}")
+        effective_loss = getattr(crit, "loss_name", loss_type)
+        logger.info(f"Using loss type: {effective_loss}")
+        if effective_loss != loss_type:
+            logger.info(
+                f"  Requested loss_type '{loss_type}' auto-adjusted for num_classes="
+                f"{cfg['model'].get('num_classes_seg', 1)}"
+            )
+        if "dice_ce_weighted" in effective_loss:
+            logger.info(f"  Positive class weight: {cfg['train'].get('pos_weight', 'None')}")
+        if "dice_focal" in effective_loss:
+            logger.info(
+                f"  Focal alpha: {cfg['train'].get('focal_alpha', 0.25)}, "
+                f"gamma: {cfg['train'].get('focal_gamma', 2.0)}"
+            )
 
     # Mixed precision setup with dtype support (bfloat16 for A100)
     use_amp = cfg["train"].get("amp", False)

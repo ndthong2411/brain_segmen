@@ -1,6 +1,7 @@
 import torch, torch.nn as nn, torch.nn.functional as F
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+import warnings
 
 def dice_loss_with_logits(logits, target, eps=1e-6):
     """
@@ -259,10 +260,12 @@ class MultiTaskLoss(nn.Module):
         seg_w: Weight for segmentation loss
         cls_w: Weight for classification loss
         boundary_w: Weight for boundary loss (optional)
-        loss_type: Type of segmentation loss
-                  'dice_ce' - Dice + BCE (default)
-                  'dice_ce_weighted' - Dice + Weighted BCE
-                  'dice_focal' - Dice + Focal Loss (best for imbalance)
+        loss_type: Type of segmentation loss.
+                  For multi-class segmentation (num_classes>1), binary loss names
+                  are automatically mapped to their multiclass counterparts.
+                  - 'dice_ce'            -> Dice + CE
+                  - 'dice_ce_weighted'   -> Dice + CE with class_weights
+                  - 'dice_focal'         -> Dice + Focal Loss
         pos_weight: Positive class weight for BCE (if loss_type='dice_ce_weighted')
                    For 97% bg / 3% tumor, use 32.0
         focal_alpha: Alpha for focal loss (if loss_type='dice_focal')
@@ -280,33 +283,15 @@ class MultiTaskLoss(nn.Module):
         self.loss_type = loss_type
         self.num_classes = num_classes
 
-        # Select segmentation loss based on type
-        # Binary segmentation losses
-        if loss_type == 'dice_ce':
-            self.seg_loss = DiceCELoss()
-        elif loss_type == 'dice_ce_weighted':
-            self.seg_loss = DiceCELoss(pos_weight=pos_weight)
-        elif loss_type == 'dice_focal':
-            self.seg_loss = DiceFocalLoss(focal_alpha=focal_alpha,
-                                         focal_gamma=focal_gamma)
-        # Multiclass segmentation losses
-        elif loss_type == 'multiclass_dice_ce':
-            self.seg_loss = MulticlassDiceCELoss(
-                num_classes=num_classes,
-                ignore_background=ignore_background,
-                class_weights=class_weights
-            )
-        elif loss_type == 'multiclass_dice_focal':
-            self.seg_loss = MulticlassDiceFocalLoss(
-                num_classes=num_classes,
-                ignore_background=ignore_background,
-                focal_alpha=focal_alpha if isinstance(focal_alpha, list) else [focal_alpha] * num_classes,
-                focal_gamma=focal_gamma
-            )
-        else:
-            raise ValueError(f"Unknown loss_type: {loss_type}. "
-                           f"Must be 'dice_ce', 'dice_ce_weighted', 'dice_focal', "
-                           f"'multiclass_dice_ce', or 'multiclass_dice_focal'")
+        self.seg_loss, self.loss_name = self._build_seg_loss(
+            loss_type=loss_type,
+            num_classes=num_classes,
+            ignore_background=ignore_background,
+            class_weights=class_weights,
+            pos_weight=pos_weight,
+            focal_alpha=focal_alpha,
+            focal_gamma=focal_gamma
+        )
 
         self.cls_loss = nn.CrossEntropyLoss()
 
@@ -337,6 +322,98 @@ class MultiTaskLoss(nn.Module):
         total_loss = self.seg_w * l_seg + self.cls_w * l_cls
 
         return total_loss, l_seg.detach(), l_cls.detach()
+
+    def _build_seg_loss(self, loss_type, num_classes, ignore_background,
+                        class_weights, pos_weight, focal_alpha, focal_gamma):
+        """
+        Build segmentation loss, automatically selecting multiclass variants
+        when the model predicts multiple classes.
+        """
+        is_multiclass = num_classes > 1
+
+        # Explicit multiclass selections
+        if loss_type == 'multiclass_dice_ce':
+            seg_loss = MulticlassDiceCELoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                class_weights=class_weights
+            )
+            return seg_loss, 'multiclass_dice_ce'
+
+        if loss_type == 'multiclass_dice_focal':
+            alpha_list = self._normalize_multiclass_alpha(
+                focal_alpha, num_classes, ignore_background
+            )
+            seg_loss = MulticlassDiceFocalLoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                focal_alpha=alpha_list,
+                focal_gamma=focal_gamma
+            )
+            return seg_loss, 'multiclass_dice_focal'
+
+        # Auto-upgrade binary losses when dealing with multiclass targets
+        if is_multiclass and loss_type in {'dice_ce', 'dice_ce_weighted'}:
+            if loss_type == 'dice_ce_weighted' and pos_weight is not None:
+                warnings.warn(
+                    "pos_weight is ignored for multiclass DiceCE; provide class_weights instead.",
+                    RuntimeWarning
+                )
+            seg_loss = MulticlassDiceCELoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                class_weights=class_weights
+            )
+            return seg_loss, 'multiclass_dice_ce(auto)'
+
+        if is_multiclass and loss_type == 'dice_focal':
+            alpha_list = self._normalize_multiclass_alpha(
+                focal_alpha, num_classes, ignore_background
+            )
+            seg_loss = MulticlassDiceFocalLoss(
+                num_classes=num_classes,
+                ignore_background=ignore_background,
+                focal_alpha=alpha_list,
+                focal_gamma=focal_gamma
+            )
+            return seg_loss, 'multiclass_dice_focal(auto)'
+
+        # Binary (single-class) losses retain their original definitions
+        if loss_type == 'dice_ce':
+            return DiceCELoss(), 'dice_ce'
+        if loss_type == 'dice_ce_weighted':
+            return DiceCELoss(pos_weight=pos_weight), 'dice_ce_weighted'
+        if loss_type == 'dice_focal':
+            return DiceFocalLoss(focal_alpha=focal_alpha, focal_gamma=focal_gamma), 'dice_focal'
+
+        raise ValueError(
+            f"Unknown loss_type: {loss_type}. Supported values: "
+            "'dice_ce', 'dice_ce_weighted', 'dice_focal', "
+            "'multiclass_dice_ce', 'multiclass_dice_focal'"
+        )
+
+    @staticmethod
+    def _normalize_multiclass_alpha(focal_alpha, num_classes, ignore_background):
+        """Ensure focal alpha is a list of length num_classes for multiclass losses."""
+        if focal_alpha is None:
+            return None
+
+        if isinstance(focal_alpha, torch.Tensor):
+            alpha = focal_alpha.detach().cpu().flatten().tolist()
+        elif isinstance(focal_alpha, (list, tuple)):
+            alpha = [float(a) for a in focal_alpha]
+        else:
+            alpha = [float(focal_alpha)] * num_classes
+
+        if len(alpha) < num_classes:
+            alpha = alpha + [alpha[-1]] * (num_classes - len(alpha))
+        elif len(alpha) > num_classes:
+            alpha = alpha[:num_classes]
+
+        if ignore_background and num_classes > 0:
+            alpha[0] = 0.0
+
+        return alpha
 
 
 # ============================================================================
