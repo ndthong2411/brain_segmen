@@ -385,7 +385,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             else:
                 total_inter, total_union = 0.0, 0.0
 
-            acc_m, n = 0.0, 0
+            cls_acc_sum, cls_batches = 0.0, 0
             sample_imgs, sample_masks, sample_preds = None, None, None
 
             # Progress bar for validation
@@ -408,10 +408,20 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
                     # Handle deep supervision outputs
                     model_output = model(img)
-                    if cfg["model"].get("deep_supervision", False):
-                        seg, cls, _ = model_output  # Ignore aux outputs in validation
+
+                    if isinstance(model_output, tuple):
+                        if len(model_output) >= 3:
+                            seg, cls, _ = model_output[:3]
+                        elif len(model_output) == 2:
+                            seg, cls = model_output
+                        elif len(model_output) == 1:
+                            seg = model_output[0]
+                            cls = None
+                        else:
+                            raise ValueError(f"Unexpected model output format: {len(model_output)} values")
                     else:
-                        seg, cls = model_output
+                        seg = model_output
+                        cls = None
 
                     # Accumulate metrics (multiclass or binary)
                     if num_classes_seg > 1:
@@ -421,8 +431,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                         total_inter += inter
                         total_union += union
 
-                    acc_m += (cls.argmax(1)==lab).float().mean().item()
-                    n += 1
+                    if cls is not None:
+                        cls_acc_sum += (cls.argmax(1) == lab).float().mean().item()
+                        cls_batches += 1
 
                     # Compute current metrics for progress bar
                     if HAS_TQDM:
@@ -468,7 +479,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 iou_m = total_inter / (total_union - total_inter + eps)
                 dice_m = (2 * total_inter) / (total_union + eps)
                 wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
-            acc_m /= n
+            acc_m = cls_acc_sum / cls_batches if cls_batches > 0 else 0.0
         else:
             # Skip validation this epoch
             iou_m = best_iou  # Use previous best
