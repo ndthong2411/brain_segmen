@@ -10,7 +10,7 @@ sys.path.append(str(ROOT / "src"))
 
 from braintumnet.utils.io import load_yaml
 from braintumnet.utils.seed import set_seed
-from braintumnet.engine.trainer import train_one_fold
+from braintumnet.engine.trainer import train_one_fold, prepare_artifact_dirs
 
 
 def merge_configs(base_cfg, override_cfg):
@@ -139,6 +139,7 @@ Examples:
     # Set experiment name based on model and fold
     model_name = cfg["model"]["model_type"]
     cfg["logging"]["exp_name"] = f"{model_name}_fold{fold}"
+    artifact_dirs = prepare_artifact_dirs(cfg)
 
     # Print config summary
     print("\n" + "="*60)
@@ -154,13 +155,16 @@ Examples:
     print(f"Channels last:   {cfg['train'].get('channels_last', False)}")
     print(f"Data backend:    {cfg['data']['backend']}")
     print(f"Experiment name: {cfg['logging']['exp_name']}")
+    print(f"Log dir:         {artifact_dirs['log_dir']}")
+    print(f"Checkpoint dir:  {artifact_dirs['save_dir']}")
+    print(f"TensorBoard dir: {artifact_dirs['out_dir']}")
     print("="*60 + "\n")
 
     # Auto-find checkpoint if --resume flag is used without path
     resume_path = args.resume
     if args.resume == 'auto':
         # Auto-detect checkpoint path based on fold and config
-        ckpt_dir = cfg["logging"]["save_dir"]
+        ckpt_dir = artifact_dirs["save_dir"]
         auto_ckpt_path = os.path.join(ckpt_dir, f"last_fold{fold}.pth")
 
         if os.path.exists(auto_ckpt_path):

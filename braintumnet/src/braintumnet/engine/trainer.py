@@ -80,12 +80,56 @@ def build_model(cfg: Dict):
     from ..models import build_model as model_factory
     return model_factory(cfg)
 
+
+def _sanitize_artifact_name(name: str) -> str:
+    safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in str(name))
+    safe = safe.strip("_").lower()
+    return safe or "model"
+
+
+def prepare_artifact_dirs(cfg: Dict) -> Dict[str, str]:
+    logging_cfg = cfg.setdefault("logging", {})
+    exp_name = logging_cfg.get("exp_name", cfg.get("exp_name", "braintumnet"))
+    model_cfg = cfg.get("model", {})
+    raw_model_name = model_cfg.get("model_name") or model_cfg.get("name") or model_cfg.get("model_type", "model")
+    model_identifier = _sanitize_artifact_name(raw_model_name)
+
+    base_log_dir = logging_cfg.get("log_dir", "logs")
+    base_out_dir = logging_cfg.get("out_dir", "runs")
+    base_save_dir = logging_cfg.get("save_dir", "checkpoints")
+
+    log_dir = os.path.join(base_log_dir, model_identifier, exp_name)
+    out_dir = os.path.join(base_out_dir, model_identifier, exp_name)
+    save_dir = os.path.join(base_save_dir, model_identifier, exp_name)
+
+    ensure_dir(log_dir)
+    ensure_dir(out_dir)
+    ensure_dir(save_dir)
+
+    logging_cfg["log_dir"] = log_dir
+    logging_cfg["out_dir"] = out_dir
+    logging_cfg["save_dir"] = save_dir
+
+    return {
+        "log_dir": log_dir,
+        "out_dir": out_dir,
+        "save_dir": save_dir,
+        "exp_name": exp_name,
+        "model_identifier": model_identifier,
+        "raw_model_name": raw_model_name,
+    }
+
 def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: str = None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    artifact_dirs = prepare_artifact_dirs(cfg)
+    log_dir = artifact_dirs["log_dir"]
+    out_dir = artifact_dirs["out_dir"]
+    save_dir = artifact_dirs["save_dir"]
+    exp_name = artifact_dirs["exp_name"]
+    raw_model_name = artifact_dirs["raw_model_name"]
+
     # Initialize loggers
-    log_dir = cfg["logging"].get("log_dir", "logs")
-    exp_name = cfg["logging"].get("exp_name", cfg.get("exp_name", "braintumnet"))
     logger = TrainingLogger(log_dir, exp_name, fold)
     metrics_logger = MetricsLogger(log_dir, exp_name, fold)
 
@@ -94,6 +138,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         logger.save_config(cfg, config_path)
 
     logger.info(f"Training on device: {device}")
+    logger.info(f"Artifact directories ({raw_model_name}) | logs: {log_dir} | tensorboard: {out_dir} | checkpoints: {save_dir}")
 
     train_loader, val_loader = build_dataloaders(cfg, fold)
     logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
