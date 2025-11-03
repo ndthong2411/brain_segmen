@@ -1,0 +1,136 @@
+# Base Configuration for All Models
+# This config contains common settings shared across all models
+#
+# Model-specific parameters will be added automatically based on --model flag
+# Hardware-specific optimizations added based on --cfg flag (default or a100)
+
+# ============================================================
+# DATA CONFIG
+# ============================================================
+data:
+  backend: "lmdb"
+  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "braintumnet/data/processed_multiclass_full"
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"
+  modality: "multi"
+  img_size: 256
+  slices_per_case: 155
+  tumor_slice_ratio: 0.7
+  num_folds: 5
+  fold: 0
+  cache_size: 0
+
+# ============================================================
+# TRAINING CONFIG (Default)
+# ============================================================
+train:
+  # Training schedule
+  epochs: 400
+  batch_size: 12          # Default for 3090 (24GB)
+  val_batch_size: 24
+  lr: 5.0e-5
+  weight_decay: 1.5e-4
+  workers: 12
+
+  # Loss (segmentation only for SOTA models)
+  loss_type: "dice_focal"
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.0
+
+  # Loss components
+  dice_weight: 1.0
+  focal_weight: 1.0
+  iou_weight: 2.5
+  boundary_weight: 0.0
+
+  # Focal loss
+  focal_alpha: [0.0, 0.4, 0.3]
+  focal_gamma: 3.0
+
+  # Class weights
+  class_weights: [1.0, 3.0, 4.0]
+  ignore_background: true
+
+  # Deep supervision
+  aux_weight: 0.3
+
+  # Optimizer
+  optimizer: "adamw"
+  optimizer_fused: false   # Enable with --cfg a100
+  grad_clip_norm: 1.0
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_steps: 2000
+  min_lr: 5.0e-7
+
+  # Mixed precision
+  amp: true
+  amp_dtype: "float16"     # bfloat16 with --cfg a100
+  grad_accum_steps: 1
+
+  # Default optimizations
+  channels_last: false     # Enable with --cfg a100
+  cudnn_benchmark: true
+  pin_memory: true
+  prefetch_factor: 4       # Higher with --cfg a100
+  persistent_workers: true
+
+  # Training control
+  early_stop_patience: 100
+  val_interval: 1
+
+  # Logging
+  log_interval: 10
+  save_interval: 10
+
+# ============================================================
+# MODEL CONFIG (Will be auto-filled based on --model flag)
+# ============================================================
+model:
+  model_type: "segunetv2"  # Overridden by --model
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2
+
+  # SegUNetV2 defaults (overridden for other models)
+  base: 64
+  dim: 512
+  patch_size: 8
+  depth: 4
+  n_heads: 8
+  dropout: 0.2
+  roi_stop_grad: true
+  deep_supervision: true
+  multi_scale_fusion: true
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  exp_name: "braintumnet"  # Will be auto-set to {model}_fold{fold}
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# AUGMENTATION
+# ============================================================
+augment:
+  # Geometric
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+  scale_range: [0.9, 1.1]
+
+  # Intensity
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.85, 1.15]
+
+  # Noise
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.01

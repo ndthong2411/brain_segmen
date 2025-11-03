@@ -1,0 +1,150 @@
+# UNETR Configuration
+# Vision Transformer-based U-Net
+#
+# Usage:
+#   python scripts/train.py --model unetr --cfg configs/model_unetr.yaml --fold 0
+
+# ============================================================
+# DATA CONFIG
+# ============================================================
+data:
+  backend: "lmdb"
+  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "braintumnet/data/processed_multiclass_full"
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"
+  modality: "multi"
+  img_size: 256
+  slices_per_case: 155
+  tumor_slice_ratio: 0.7
+  num_folds: 5
+  fold: 0
+  cache_size: 0
+
+# ============================================================
+# MODEL: UNETR
+# ============================================================
+model:
+  model_type: "unetr"
+
+  # Input/Output
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2  # Ignored
+
+  # UNETR specific parameters
+  img_size: 256
+  hidden_size: 768       # ViT-Base: 768, ViT-Large: 1024
+  feature_size: 16       # CNN decoder feature dimension
+  num_heads: 12          # ViT-Base: 12, ViT-Large: 16
+  # mlp_dim: 3072        # Auto-computed as 4 * hidden_size
+  # num_layers: 12       # Transformer depth (default: 12)
+  # patch_size: 16       # Patch size (default: 16)
+  # dropout_rate: 0.1    # Dropout (default: 0.1)
+
+# ============================================================
+# TRAINING CONFIG
+# ============================================================
+train:
+  # Training schedule
+  epochs: 400
+  batch_size: 12         # UNETR is memory-heavy, use smaller batch
+  val_batch_size: 24
+  lr: 5.0e-5
+  weight_decay: 1.5e-4
+  workers: 16
+
+  # Loss (segmentation only)
+  loss_type: "dice_focal"
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.0
+
+  # Loss components
+  dice_weight: 1.0
+  focal_weight: 1.0
+  iou_weight: 2.5
+  boundary_weight: 0.0
+
+  # Focal loss
+  focal_alpha: [0.0, 0.4, 0.3]
+  focal_gamma: 3.0
+
+  # Class weights
+  class_weights: [1.0, 3.0, 4.0]
+  ignore_background: true
+
+  # Deep supervision (not used for UNETR)
+  aux_weight: 0.3
+
+  # Optimizer
+  optimizer: "adamw"
+  optimizer_fused: true
+  grad_clip_norm: 1.0
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_steps: 2000
+  min_lr: 5.0e-7
+
+  # Mixed precision
+  amp: true
+  amp_dtype: "bfloat16"
+  grad_accum_steps: 1
+
+  # Optimizations
+  channels_last: true
+  cudnn_benchmark: true
+  pin_memory: true
+  prefetch_factor: 8
+  persistent_workers: true
+
+  # Training control
+  early_stop_patience: 100
+  val_interval: 1
+
+  # Logging
+  log_interval: 10
+  save_interval: 10
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  exp_name: "unetr_multiclass"
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# AUGMENTATION
+# ============================================================
+augment:
+  # Geometric
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+  scale_range: [0.9, 1.1]
+
+  # Intensity
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.85, 1.15]
+
+  # Noise
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.01
+
+# ============================================================
+# EXPECTED PERFORMANCE
+# ============================================================
+# UNETR (ViT-Base):
+# - WT Dice: 0.86-0.89
+# - TC Dice: 0.81-0.84
+# - ED Dice: 0.83-0.86
+# - Parameters: ~93M
+# - Memory: ~22-26GB (batch=12)
+#
+# Note: Swin-UNETR typically outperforms UNETR with fewer params
+# ============================================================

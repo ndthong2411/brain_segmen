@@ -76,11 +76,9 @@ def build_dataloaders(cfg: Dict, fold: int):
     return train_loader, val_loader
 
 def build_model(cfg: Dict):
-    mcfg = cfg["model"]
-    return BrainTumNet(in_ch=mcfg["in_channels"], num_cls=mcfg["num_classes_cls"], base=mcfg["base"],
-                       dim=mcfg["dim"], patch=mcfg["patch_size"], depth=mcfg["depth"], n_heads=mcfg["n_heads"],
-                       roi_stop_grad=mcfg["roi_stop_grad"], deep_supervision=mcfg.get("deep_supervision", False),
-                       num_classes_seg=mcfg.get("num_classes_seg", 1))
+    """Build model using factory pattern"""
+    from ..models import build_model as model_factory
+    return model_factory(cfg)
 
 def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: str = None):
     device = "cuda" if torch.cuda.is_available() else "cpu"

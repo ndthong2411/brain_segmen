@@ -150,5 +150,5 @@ class LMDBDataset(Dataset):
 
     def __del__(self):
         # Close LMDB environment when dataset is destroyed
-        if hasattr(self, 'env'):
+        if hasattr(self, 'env') and self.env is not None:
             self.env.close()

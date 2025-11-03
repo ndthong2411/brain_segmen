@@ -1,0 +1,27 @@
+# A100 Hardware Optimizations
+# This config overrides base.yaml with A100-specific settings
+#
+# Usage: python scripts/train.py --model swin_unetr --cfg a100 --fold 0
+
+# ============================================================
+# A100-SPECIFIC TRAINING OPTIMIZATIONS
+# ============================================================
+train:
+  # Larger batch sizes (A100 has 40-80GB memory)
+  batch_size: 16
+  val_batch_size: 32
+  workers: 16
+
+  # A100 optimizations
+  optimizer_fused: true          # Fused AdamW (faster on A100)
+  amp_dtype: "bfloat16"          # BF16 on A100 (better than FP16)
+  channels_last: true            # Memory layout optimization
+  prefetch_factor: 8             # Higher prefetch for faster data loading
+
+# Model-specific batch size adjustments for A100
+# (will be applied based on --model flag)
+model_batch_sizes:
+  segunetv2: 16
+  swin_unetr: 16
+  nnunet: 16
+  unetr: 12      # UNETR is memory-heavy

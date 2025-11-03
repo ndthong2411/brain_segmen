@@ -1,0 +1,150 @@
+# Swin-UNETR Configuration
+# Inherits from phase2_a100_lmdb.yaml and overrides model section
+#
+# Usage:
+#   python scripts/train.py --model swin_unetr --cfg configs/model_swin_unetr.yaml --fold 0
+#   OR
+#   python scripts/train.py --cfg configs/model_swin_unetr.yaml --fold 0
+
+# ============================================================
+# DATA CONFIG (same as base)
+# ============================================================
+data:
+  backend: "lmdb"
+  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "braintumnet/data/processed_multiclass_full"
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"
+  modality: "multi"
+  img_size: 256
+  slices_per_case: 155
+  tumor_slice_ratio: 0.7
+  num_folds: 5
+  fold: 0
+  cache_size: 0
+
+# ============================================================
+# MODEL: Swin-UNETR
+# ============================================================
+model:
+  model_type: "swin_unetr"
+
+  # Input/Output
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2  # Ignored (segmentation only)
+
+  # Swin-UNETR specific parameters
+  feature_size: 48        # 48 for large model, 24 for small
+  img_size: 256
+  use_checkpoint: true    # Gradient checkpointing (save memory)
+
+  # Swin Transformer architecture
+  # depths: [2, 2, 6, 2]  # Swin-Base (default in code)
+  # num_heads: [3, 6, 12, 24]  # Default in code
+  # window_size: 7  # Default in code
+
+# ============================================================
+# TRAINING CONFIG
+# ============================================================
+train:
+  # Training schedule
+  epochs: 400
+  batch_size: 16          # Swin-UNETR can handle large batch
+  val_batch_size: 32
+  lr: 5.0e-5
+  weight_decay: 1.5e-4
+  workers: 16
+
+  # Loss (segmentation only)
+  loss_type: "dice_focal"  # Or "ultimate_multitask" if you keep classification
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.0     # Disable classification loss
+
+  # Loss components
+  dice_weight: 1.0
+  focal_weight: 1.0
+  iou_weight: 2.5
+  boundary_weight: 0.0
+
+  # Focal loss
+  focal_alpha: [0.0, 0.4, 0.3]
+  focal_gamma: 3.0
+
+  # Class weights
+  class_weights: [1.0, 3.0, 4.0]
+  ignore_background: true
+
+  # Deep supervision (not used for Swin-UNETR, but keep for compatibility)
+  aux_weight: 0.3
+
+  # Optimizer
+  optimizer: "adamw"
+  optimizer_fused: true
+  grad_clip_norm: 1.0
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_steps: 2000
+  min_lr: 5.0e-7
+
+  # Mixed precision
+  amp: true
+  amp_dtype: "bfloat16"
+  grad_accum_steps: 1
+
+  # A100 optimizations
+  channels_last: true
+  cudnn_benchmark: true
+  pin_memory: true
+  prefetch_factor: 8
+  persistent_workers: true
+
+  # Training control
+  early_stop_patience: 100
+  val_interval: 1
+
+  # Logging
+  log_interval: 10
+  save_interval: 10
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  exp_name: "swin_unetr_multiclass"
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# AUGMENTATION (same as base)
+# ============================================================
+augment:
+  # Geometric
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+  scale_range: [0.9, 1.1]
+
+  # Intensity
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.85, 1.15]
+
+  # Noise
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.01
+
+# ============================================================
+# EXPECTED PERFORMANCE
+# ============================================================
+# Swin-UNETR is expected to achieve SOTA performance:
+# - WT Dice: 0.89-0.92 (vs 0.85-0.88 for baseline)
+# - TC Dice: 0.84-0.87
+# - ED Dice: 0.85-0.88
+# - Parameters: ~62M
+# - Memory: ~20-24GB (batch=16, A100)
+# ============================================================

@@ -1,0 +1,19 @@
+# TransUNet Configuration
+# ResNet Encoder + Vision Transformer Bottleneck + CNN Decoder
+
+model:
+  model_type: "transunet"
+
+  # TransUNet architecture parameters
+  embed_dim: 768        # Transformer embedding dimension (ViT-Base)
+  depth: 12             # Number of transformer blocks
+  num_heads: 12         # Number of attention heads
+  base: 64              # Base channels in ResNet encoder/decoder
+
+  img_size: 256         # Must be 256 for this implementation
+
+train:
+  batch_size: 10        # TransUNet is memory-intensive (105M params)
+
+  # Use gradient checkpointing if OOM
+  # gradient_checkpointing: true

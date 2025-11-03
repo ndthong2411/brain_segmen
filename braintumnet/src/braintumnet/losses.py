@@ -287,8 +287,11 @@ class MultiTaskLoss(nn.Module):
         else:
             l_boundary = torch.tensor(0.0, device=seg_logits.device)
 
-        # Classification loss
-        l_cls = self.cls_loss(cls_logits, cls_label)
+        # Classification loss (only if cls_logits is not None)
+        if cls_logits is not None and self.cls_w > 0:
+            l_cls = self.cls_loss(cls_logits, cls_label)
+        else:
+            l_cls = torch.tensor(0.0, device=seg_logits.device)
 
         # Total loss
         total_loss = self.seg_w * l_seg + self.cls_w * l_cls

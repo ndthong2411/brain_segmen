@@ -1,0 +1,21 @@
+# LG-UNETR Configuration
+# Local-Global UNet Transformer
+# Dual-path encoder: CNN (local) + Transformer (global)
+
+model:
+  model_type: "lg_unetr"
+
+  # LG-UNETR architecture parameters
+  base: 32              # Base CNN channels (32 -> 64 -> 128 -> 256 -> 512)
+  num_levels: 4         # Number of encoder-decoder levels
+
+  # Transformer path parameters
+  embed_dim: 384        # Transformer embedding dimension
+  depth: 12             # Number of transformer blocks
+  num_heads: 6          # Number of attention heads (384 / 6 = 64 per head)
+
+train:
+  batch_size: 11        # Balanced architecture (~45M params)
+
+  # Good balance between local and global features
+  # Performs well on both small and large tumors

@@ -1,0 +1,18 @@
+# Swin-UNETR Model Configuration
+# Auto-loaded when --model swin_unetr is specified
+
+model:
+  model_type: "swin_unetr"
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2
+
+  # Swin-UNETR specific
+  feature_size: 48
+  img_size: 256
+  use_checkpoint: true
+
+# Override training for Swin-UNETR if needed
+train:
+  # Can handle larger batch on default hardware
+  batch_size: 14

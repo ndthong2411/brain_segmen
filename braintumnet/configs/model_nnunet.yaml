@@ -1,0 +1,141 @@
+# nnU-Net Style Architecture Configuration
+#
+# Usage:
+#   python scripts/train.py --model nnunet --cfg configs/model_nnunet.yaml --fold 0
+
+# ============================================================
+# DATA CONFIG
+# ============================================================
+data:
+  backend: "lmdb"
+  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "braintumnet/data/processed_multiclass_full"
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"
+  modality: "multi"
+  img_size: 256
+  slices_per_case: 155
+  tumor_slice_ratio: 0.7
+  num_folds: 5
+  fold: 0
+  cache_size: 0
+
+# ============================================================
+# MODEL: nnU-Net Style
+# ============================================================
+model:
+  model_type: "nnunet"
+
+  # Input/Output
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2  # Ignored
+
+  # nnU-Net specific
+  base: 32               # Base feature channels
+  deep_supervision: true # Deep supervision at all decoder levels
+
+# ============================================================
+# TRAINING CONFIG
+# ============================================================
+train:
+  # Training schedule
+  epochs: 400
+  batch_size: 16
+  val_batch_size: 32
+  lr: 5.0e-5
+  weight_decay: 1.5e-4
+  workers: 16
+
+  # Loss (segmentation only)
+  loss_type: "dice_focal"
+  seg_loss_weight: 1.0
+  cls_loss_weight: 0.0
+
+  # Loss components
+  dice_weight: 1.0
+  focal_weight: 1.0
+  iou_weight: 2.5
+  boundary_weight: 0.0
+
+  # Focal loss
+  focal_alpha: [0.0, 0.4, 0.3]
+  focal_gamma: 3.0
+
+  # Class weights
+  class_weights: [1.0, 3.0, 4.0]
+  ignore_background: true
+
+  # Deep supervision
+  aux_weight: 0.3        # Weight for auxiliary outputs
+
+  # Optimizer
+  optimizer: "adamw"
+  optimizer_fused: true
+  grad_clip_norm: 1.0
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_steps: 2000
+  min_lr: 5.0e-7
+
+  # Mixed precision
+  amp: true
+  amp_dtype: "bfloat16"
+  grad_accum_steps: 1
+
+  # Optimizations
+  channels_last: true
+  cudnn_benchmark: true
+  pin_memory: true
+  prefetch_factor: 8
+  persistent_workers: true
+
+  # Training control
+  early_stop_patience: 100
+  val_interval: 1
+
+  # Logging
+  log_interval: 10
+  save_interval: 10
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  log_dir: "logs"
+  out_dir: "runs"
+  save_dir: "checkpoints"
+  exp_name: "nnunet_multiclass"
+  use_tensorboard: true
+  log_every_n_steps: 50
+  save_top_k: 3
+
+# ============================================================
+# AUGMENTATION
+# ============================================================
+augment:
+  # Geometric
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+  scale_range: [0.9, 1.1]
+
+  # Intensity
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.85, 1.15]
+
+  # Noise
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.01
+
+# ============================================================
+# EXPECTED PERFORMANCE
+# ============================================================
+# nnU-Net style architecture (5-level):
+# - WT Dice: 0.88-0.91
+# - TC Dice: 0.83-0.86
+# - ED Dice: 0.84-0.87
+# - Parameters: ~50-60M (base=32)
+# - Memory: ~18-20GB (batch=16)
+# ============================================================

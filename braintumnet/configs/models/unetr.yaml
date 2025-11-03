@@ -1,0 +1,18 @@
+# UNETR Model Configuration
+# Auto-loaded when --model unetr is specified
+
+model:
+  model_type: "unetr"
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2
+
+  # UNETR specific
+  img_size: 256
+  hidden_size: 768
+  feature_size: 16
+  num_heads: 12
+
+# UNETR is memory-heavy
+train:
+  batch_size: 10    # Smaller batch even on default hardware
