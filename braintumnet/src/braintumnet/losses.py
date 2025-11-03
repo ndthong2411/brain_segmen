@@ -3,11 +3,20 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 def dice_loss_with_logits(logits, target, eps=1e-6):
+    """
+    Stable dice loss computation that works under mixed precision.
+    Cast to float32 for the math to avoid float16 underflow, then return
+    the result in the original dtype for downstream scaling.
+    """
+    orig_dtype = logits.dtype
+    logits = logits.float()
+    target = target.float()
+
     pred = torch.sigmoid(logits)
-    num = 2 * (pred * target).sum(dim=(2,3))
-    den = (pred.pow(2).sum(dim=(2,3)) + target.pow(2).sum(dim=(2,3))) + eps
+    num = 2 * (pred * target).sum(dim=(2, 3))
+    den = pred.pow(2).sum(dim=(2, 3)) + target.pow(2).sum(dim=(2, 3)) + eps
     dice = 1 - (num + eps) / den
-    return dice.mean()
+    return dice.mean().to(orig_dtype)
 
 class FocalLoss(nn.Module):
     """
@@ -65,11 +74,15 @@ class FocalLoss(nn.Module):
             logits: (B, 1, H, W) raw predictions
             target: (B, 1, H, W) binary ground truth {0, 1}
         """
+        orig_dtype = logits.dtype
+        logits = logits.float()
+
         # Convert to probabilities
         probs = torch.sigmoid(logits)
 
-        # For numerical stability
-        probs = torch.clamp(probs, min=1e-7, max=1-1e-7)
+        # For numerical stability (respect current dtype limits)
+        finfo = torch.finfo(probs.dtype)
+        probs = torch.clamp(probs, min=finfo.tiny, max=1 - finfo.eps)
 
         # Focal loss computation
         # pt = p if y=1, else (1-p)
@@ -89,7 +102,7 @@ class FocalLoss(nn.Module):
         # Final focal loss
         loss = alpha_t * focal_weight * bce
 
-        return loss.mean()
+        return loss.mean().to(orig_dtype)
 
 
 class DiceCELoss(nn.Module):
