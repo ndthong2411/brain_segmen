@@ -94,9 +94,35 @@ def prepare_artifact_dirs(cfg: Dict) -> Dict[str, str]:
     raw_model_name = model_cfg.get("model_name") or model_cfg.get("name") or model_cfg.get("model_type", "model")
     model_identifier = _sanitize_artifact_name(raw_model_name)
 
-    base_log_dir = logging_cfg.get("log_dir", "logs")
-    base_out_dir = logging_cfg.get("out_dir", "runs")
-    base_save_dir = logging_cfg.get("save_dir", "checkpoints")
+    if logging_cfg.get("_artifact_dirs_prepared"):
+        log_dir = logging_cfg["log_dir"]
+        out_dir = logging_cfg["out_dir"]
+        save_dir = logging_cfg["save_dir"]
+        ensure_dir(log_dir)
+        ensure_dir(out_dir)
+        ensure_dir(save_dir)
+        return {
+            "log_dir": log_dir,
+            "out_dir": out_dir,
+            "save_dir": save_dir,
+            "exp_name": exp_name,
+            "model_identifier": model_identifier,
+            "raw_model_name": raw_model_name,
+        }
+
+    base_log_dir = logging_cfg.get("_base_log_dir")
+    base_out_dir = logging_cfg.get("_base_out_dir")
+    base_save_dir = logging_cfg.get("_base_save_dir")
+
+    if base_log_dir is None:
+        base_log_dir = logging_cfg.get("log_dir", "logs")
+        logging_cfg["_base_log_dir"] = base_log_dir
+    if base_out_dir is None:
+        base_out_dir = logging_cfg.get("out_dir", "runs")
+        logging_cfg["_base_out_dir"] = base_out_dir
+    if base_save_dir is None:
+        base_save_dir = logging_cfg.get("save_dir", "checkpoints")
+        logging_cfg["_base_save_dir"] = base_save_dir
 
     log_dir = os.path.join(base_log_dir, model_identifier, exp_name)
     out_dir = os.path.join(base_out_dir, model_identifier, exp_name)
@@ -109,6 +135,7 @@ def prepare_artifact_dirs(cfg: Dict) -> Dict[str, str]:
     logging_cfg["log_dir"] = log_dir
     logging_cfg["out_dir"] = out_dir
     logging_cfg["save_dir"] = save_dir
+    logging_cfg["_artifact_dirs_prepared"] = True
 
     return {
         "log_dir": log_dir,
