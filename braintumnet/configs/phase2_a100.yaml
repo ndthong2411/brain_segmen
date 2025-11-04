@@ -91,7 +91,7 @@ train:
   # ============================================================
   # TRAINING CONTROL
   # ============================================================
-  early_stop_patience: 100
+  early_stop_patience: 30
   val_interval: 1
 
   # Logging

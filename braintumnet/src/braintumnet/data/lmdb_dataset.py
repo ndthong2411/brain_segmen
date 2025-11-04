@@ -14,7 +14,8 @@ import pickle
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from typing import List, Dict
+from typing import List, Dict, Optional
+from .advanced_transforms import MedicalAugmentation
 
 
 class LMDBDataset(Dataset):
@@ -26,21 +27,43 @@ class LMDBDataset(Dataset):
         lmdb_root: Path to LMDB database directory
         split_file: Path to split file (CSV or TXT)
         img_size: Image size (not used, images pre-resized)
-        rotate_deg: Rotation angle for augmentation (not implemented yet)
-        hflip_p: Horizontal flip probability (not implemented yet)
-        vflip_p: Vertical flip probability (not implemented yet)
+        rotate_deg: Rotation angle for augmentation (legacy, not used)
+        hflip_p: Horizontal flip probability (legacy, not used)
+        vflip_p: Vertical flip probability (legacy, not used)
         train: Whether this is training set
         in_channels: Number of input channels (should be 4 for multi-modal)
+        augment_config: Dictionary of augmentation parameters for MedicalAugmentation (Phase 1)
     """
 
     def __init__(self, lmdb_root: str, split_file: str,
                  img_size: int=256, rotate_deg: int=30, hflip_p: float=0.5, vflip_p: float=0.5,
-                 train: bool=True, in_channels: int=4):
+                 train: bool=True, in_channels: int=4, augment_config: Optional[Dict]=None):
         self.lmdb_root = lmdb_root
         self.train = train
         self.img_size = img_size
         self.rotate_deg, self.hflip_p, self.vflip_p = rotate_deg, hflip_p, vflip_p
         self.in_channels = in_channels
+
+        # Phase 1: Advanced Medical Augmentation
+        if train and augment_config is not None:
+            self.medical_aug = MedicalAugmentation(
+                elastic_deform_p=augment_config.get('elastic_deform_p', 0.3),
+                elastic_alpha=augment_config.get('elastic_alpha', 30),
+                elastic_sigma=augment_config.get('elastic_sigma', 4),
+                bias_field_p=augment_config.get('bias_field_p', 0.5),
+                bias_field_scale=augment_config.get('bias_field_scale', 0.3),
+                gaussian_blur_p=augment_config.get('gaussian_blur_p', 0.2),
+                gaussian_blur_sigma=augment_config.get('gaussian_blur_sigma', (0.5, 1.5)),
+                gamma_p=augment_config.get('gamma_p', 0.5),
+                gamma_range=augment_config.get('gamma_range', (0.7, 1.4)),
+                cutout_p=augment_config.get('cutout_p', 0.2),
+                cutout_n_holes=augment_config.get('cutout_n_holes', 3),
+                cutout_size=augment_config.get('cutout_size', 20),
+                local_shuffle_p=augment_config.get('local_shuffle_p', 0.15),
+                local_shuffle_size=augment_config.get('local_shuffle_size', 3),
+            )
+        else:
+            self.medical_aug = None
 
         # Delay LMDB environment creation (lazy init in __getitem__)
         # This is required for Windows multiprocessing (Environment objects can't be pickled)
@@ -130,11 +153,15 @@ class LMDBDataset(Dataset):
 
         # Convert to torch tensors
         img_t = torch.from_numpy(image).float()  # (4, H, W)
-        msk_t = torch.from_numpy(mask).long().unsqueeze(0)  # (1, H, W)
+        msk_t = torch.from_numpy(mask).long()  # (H, W)
 
-        # TODO: Add augmentation for training
-        # Currently, augmentation is not implemented for LMDB backend
-        # Images are pre-processed and augmentation should be added here
+        # Phase 1: Apply advanced medical augmentation
+        if self.train and self.medical_aug is not None:
+            img_t, msk_t = self.medical_aug(img_t, msk_t)
+
+        # Ensure mask has channel dimension
+        if msk_t.ndim == 2:
+            msk_t = msk_t.unsqueeze(0)  # (1, H, W)
 
         # Get case label
         cid = self.slice_case.get(slice_id, slice_id.split("_")[0])

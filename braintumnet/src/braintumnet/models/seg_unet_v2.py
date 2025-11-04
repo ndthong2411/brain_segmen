@@ -99,6 +99,57 @@ class EncoderBlock(nn.Module):
         return x, x_down
 
 
+class AttentionGate(nn.Module):
+    """
+    Attention Gate for skip connections (nnU-Net style, Phase 2)
+
+    Highlights salient features from encoder using gating signal from decoder.
+    Suppresses irrelevant regions in skip connections.
+
+    Expected improvement: +1-2% Dice through better feature selection
+
+    Args:
+        F_g: Channels in gating signal (from decoder)
+        F_l: Channels in skip connection (from encoder)
+        F_int: Intermediate channels
+    """
+    def __init__(self, F_g, F_l, F_int):
+        super().__init__()
+        self.W_g = nn.Sequential(
+            nn.Conv2d(F_g, F_int, kernel_size=1, bias=False),
+            nn.InstanceNorm2d(F_int, affine=True)
+        )
+        self.W_x = nn.Sequential(
+            nn.Conv2d(F_l, F_int, kernel_size=1, bias=False),
+            nn.InstanceNorm2d(F_int, affine=True)
+        )
+        self.psi = nn.Sequential(
+            nn.Conv2d(F_int, 1, kernel_size=1, bias=True),
+            nn.Sigmoid()
+        )
+        self.relu = nn.LeakyReLU(0.01, inplace=True)
+
+    def forward(self, g, x):
+        """
+        Args:
+            g: (B, F_g, H, W) gating signal from decoder
+            x: (B, F_l, H, W) skip connection from encoder
+
+        Returns:
+            (B, F_l, H, W) attention-weighted skip connection
+        """
+        # Project both to intermediate dimension
+        g1 = self.W_g(g)
+        x1 = self.W_x(x)
+
+        # Combine and compute attention
+        psi = self.relu(g1 + x1)
+        psi = self.psi(psi)
+
+        # Apply attention weights to skip connection
+        return x * psi
+
+
 class DecoderBlock(nn.Module):
     """
     Decoder block with residual convolutions and CBAM attention
@@ -107,18 +158,93 @@ class DecoderBlock(nn.Module):
     - Residual connections
     - CBAM attention on skip connections
     - Dropout for regularization
+    - (Phase 2) Optional Attention Gates
     """
-    def __init__(self, in_ch, out_ch, norm='instance', dropout=0.0):
+    def __init__(self, in_ch, out_ch, norm='instance', dropout=0.0, use_attention_gate=False):
         super().__init__()
+        self.use_attention_gate = use_attention_gate
         self.up = nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2, bias=False)
+
+        # Phase 2: Attention Gate (optional)
+        if use_attention_gate:
+            self.attn_gate = AttentionGate(F_g=out_ch, F_l=out_ch, F_int=out_ch // 2)
+
         self.cbam = CBAM(out_ch)
         self.block = ResidualConvBlock(out_ch * 2, out_ch, norm=norm, dropout=dropout)
 
     def forward(self, x, skip):
         x = self.up(x)
-        x = torch.cat([x, self.cbam(skip)], dim=1)
+
+        # Phase 2: Apply attention gate if enabled
+        if self.use_attention_gate:
+            skip = self.attn_gate(g=x, x=skip)
+
+        skip = self.cbam(skip)
+        x = torch.cat([x, skip], dim=1)
         x = self.block(x)
         return x
+
+
+class BoundaryRefinementModule(nn.Module):
+    """
+    Boundary Refinement Module for improved edge precision
+
+    Addresses the IoU-Dice gap by explicitly modeling boundaries
+    using edge detection and boundary-aware attention.
+
+    Expected improvement: +2-3% Dice, reduces IoU-Dice gap from 10% to ~5%
+    """
+    def __init__(self, in_channels):
+        super().__init__()
+        # Edge detector (Sobel-like learnable filter)
+        self.edge_conv = nn.Conv2d(in_channels, in_channels, 3, padding=1,
+                                    groups=in_channels, bias=False)
+
+        # Initialize with edge detection kernels
+        with torch.no_grad():
+            # Horizontal Sobel kernel
+            sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
+            # Vertical Sobel kernel
+            sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
+            # Combine for edge magnitude
+            sobel = (sobel_x.abs() + sobel_y.abs()) / 2
+
+            # Apply to all channels
+            for i in range(in_channels):
+                self.edge_conv.weight[i, 0] = sobel / sobel.sum()
+
+        # Boundary attention mechanism
+        self.boundary_attn = nn.Sequential(
+            nn.Conv2d(in_channels * 2, in_channels, 1, bias=False),
+            nn.InstanceNorm2d(in_channels, affine=True),
+            nn.LeakyReLU(0.01),
+            nn.Conv2d(in_channels, in_channels, 3, padding=1, bias=False),
+            nn.InstanceNorm2d(in_channels, affine=True),
+            nn.LeakyReLU(0.01),
+            nn.Conv2d(in_channels, in_channels, 1, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, features):
+        """
+        Args:
+            features: (B, C, H, W) feature map
+        Returns:
+            refined: (B, C, H, W) boundary-refined features
+        """
+        # Detect edges
+        edges = self.edge_conv(features)
+
+        # Concatenate original features with edge features
+        combined = torch.cat([features, edges], dim=1)
+
+        # Generate boundary attention map
+        attn = self.boundary_attn(combined)
+
+        # Apply attention with residual connection
+        refined = features * (1 + attn)  # Multiplicative attention + identity
+
+        return refined
 
 
 class MultiScaleFusion(nn.Module):
@@ -191,14 +317,19 @@ class SegUNetV2(nn.Module):
         norm: Normalization type ('instance', 'batch', 'group')
         deep_supervision: Use deep supervision
         multi_scale_fusion: Use multi-scale fusion
+        boundary_refinement: Use boundary refinement (Phase 1 optimization, improves IoU-Dice gap)
     """
     def __init__(self, in_ch=4, base=48, dim=384, patch=8, depth=4, n_heads=8,
                  num_classes=3, dropout=0.15, norm='instance',
-                 deep_supervision=True, multi_scale_fusion=True):
+                 deep_supervision=True, multi_scale_fusion=True, boundary_refinement=False,
+                 use_multiscale_transformer=False, use_attention_gates=False):
         super().__init__()
         self.patch = patch
         self.deep_supervision = deep_supervision
         self.multi_scale_fusion = multi_scale_fusion
+        self.boundary_refinement = boundary_refinement
+        self.use_multiscale_transformer = use_multiscale_transformer
+        self.use_attention_gates = use_attention_gates
         self.num_classes = num_classes
 
         # Encoder
@@ -207,18 +338,29 @@ class SegUNetV2(nn.Module):
         self.e3 = EncoderBlock(base*2, base*4, norm=norm, dropout=dropout)
         self.e4 = EncoderBlock(base*4, base*8, norm=norm, dropout=dropout)
 
-        # Transformer bottleneck
+        # Transformer bottleneck (Phase 1 or Phase 2)
         self.bottleneck_conv = conv_norm_act(base*8, dim, k=1, s=1, p=0, norm=norm)
-        self.amt = AdaptiveMaskedTransformer(
-            in_ch=dim, dim=dim, patch_size=patch, depth=depth, n_heads=n_heads
-        )
-        self.tr_upsample = nn.ConvTranspose2d(dim, base*8, kernel_size=patch, stride=patch, bias=False)
 
-        # Decoder
-        self.d4 = DecoderBlock(base*8, base*8, norm=norm, dropout=dropout)
-        self.d3 = DecoderBlock(base*8, base*4, norm=norm, dropout=dropout)
-        self.d2 = DecoderBlock(base*4, base*2, norm=norm, dropout=dropout/2)
-        self.d1 = DecoderBlock(base*2, base, norm=norm, dropout=0)
+        if use_multiscale_transformer:
+            # Phase 2: Multi-scale transformer
+            from .multiscale_transformer import MultiScaleTransformerBottleneck
+            self.bottleneck = MultiScaleTransformerBottleneck(
+                in_ch=dim, dim=dim,
+                patch_sizes=[4, 8, 16],  # Multi-scale
+                depth=depth, n_heads=n_heads
+            )
+        else:
+            # Phase 1: Single-scale transformer (original)
+            self.amt = AdaptiveMaskedTransformer(
+                in_ch=dim, dim=dim, patch_size=patch, depth=depth, n_heads=n_heads
+            )
+            self.tr_upsample = nn.ConvTranspose2d(dim, base*8, kernel_size=patch, stride=patch, bias=False)
+
+        # Decoder (Phase 2: with optional attention gates)
+        self.d4 = DecoderBlock(base*8, base*8, norm=norm, dropout=dropout, use_attention_gate=use_attention_gates)
+        self.d3 = DecoderBlock(base*8, base*4, norm=norm, dropout=dropout, use_attention_gate=use_attention_gates)
+        self.d2 = DecoderBlock(base*4, base*2, norm=norm, dropout=dropout/2, use_attention_gate=use_attention_gates)
+        self.d1 = DecoderBlock(base*2, base, norm=norm, dropout=0, use_attention_gate=use_attention_gates)
 
         # Multi-scale fusion
         if self.multi_scale_fusion:
@@ -227,6 +369,10 @@ class SegUNetV2(nn.Module):
                 out_channels=base
             )
             self.fusion_conv = ResidualConvBlock(base*2, base, norm=norm, dropout=0)
+
+        # Boundary refinement (Phase 1 optimization)
+        if self.boundary_refinement:
+            self.boundary_refine = BoundaryRefinementModule(base)
 
         # Segmentation head
         self.head = nn.Conv2d(base, num_classes, 1)
@@ -244,10 +390,16 @@ class SegUNetV2(nn.Module):
         s3, x3 = self.e3(x2)     # base*4, H/4, W/4
         s4, x4 = self.e4(x3)     # base*8, H/8, W/8
 
-        # Transformer bottleneck
+        # Transformer bottleneck (Phase 1 or Phase 2)
         b = self.bottleneck_conv(x4)
-        b = self.amt(b)
-        b = self.tr_upsample(b)
+
+        if self.use_multiscale_transformer:
+            # Phase 2: Multi-scale transformer (already returns spatial)
+            b = self.bottleneck(b)
+        else:
+            # Phase 1: Single-scale transformer
+            b = self.amt(b)
+            b = self.tr_upsample(b)
 
         # Decoder
         d4 = self.d4(b, s4)      # base*8, H/8, W/8
@@ -270,6 +422,10 @@ class SegUNetV2(nn.Module):
             final_features = self.fusion_conv(combined)
         else:
             final_features = d1
+
+        # Boundary refinement (Phase 1 optimization - improves IoU-Dice gap)
+        if self.boundary_refinement:
+            final_features = self.boundary_refine(final_features)
 
         # Final segmentation
         seg = self.head(final_features)

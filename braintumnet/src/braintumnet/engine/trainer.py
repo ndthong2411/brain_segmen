@@ -35,6 +35,82 @@ def _cosine_lr_with_warmup(optimizer, base_lr, t, T, warmup_steps=500, min_lr=1e
         lr = min_lr + (base_lr - min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
     for pg in optimizer.param_groups: pg["lr"] = lr
 
+
+def centralized_gradient(optimizer):
+    """
+    Apply Gradient Centralization (Phase 1 Optimization)
+
+    Gradient Centralization (GC) centralizes the gradient vectors to have zero mean
+    before applying to weight updates. This simple technique improves:
+    - Optimization stability
+    - Convergence speed
+    - Generalization performance
+
+    Expected improvement: +0.3-0.7% Dice
+
+    Reference: Yong et al. "Gradient Centralization: A New Optimization Technique
+               for Deep Neural Networks" (ECCV 2020)
+
+    Args:
+        optimizer: PyTorch optimizer with gradients already computed
+    """
+    for group in optimizer.param_groups:
+        for p in group['params']:
+            if p.grad is None:
+                continue
+            # Only apply to convolutional and linear layers (ndim > 1)
+            if len(p.grad.shape) > 1:
+                # Subtract mean across all dimensions except output channel
+                # For Conv: (out_ch, in_ch, h, w) -> mean over (in_ch, h, w)
+                # For Linear: (out_features, in_features) -> mean over (in_features,)
+                dims_to_reduce = tuple(range(1, len(p.grad.shape)))
+                grad_mean = p.grad.mean(dim=dims_to_reduce, keepdim=True)
+                p.grad.sub_(grad_mean)
+
+
+class DeepSupervisionScheduler:
+    """
+    Deep Supervision Weight Scheduler (Phase 1 Optimization)
+
+    Gradually reduces auxiliary loss weight during training.
+    Early epochs need strong deep supervision for better gradient flow.
+    Late epochs should focus on main output for fine-tuning.
+
+    Expected improvement: +0.5-1% Dice through better training dynamics
+
+    Args:
+        initial_weight: Starting auxiliary weight (default: 0.5)
+        final_weight: Ending auxiliary weight (default: 0.1)
+        total_epochs: Total number of training epochs (default: 400)
+        schedule_type: "linear" or "cosine" decay (default: "linear")
+    """
+    def __init__(self, initial_weight=0.5, final_weight=0.1, total_epochs=400, schedule_type="linear"):
+        self.initial = initial_weight
+        self.final = final_weight
+        self.total_epochs = total_epochs
+        self.schedule_type = schedule_type
+
+    def get_weight(self, epoch):
+        """
+        Get auxiliary loss weight for current epoch
+
+        Args:
+            epoch: Current epoch number (0-indexed)
+
+        Returns:
+            weight: Auxiliary loss weight for this epoch
+        """
+        progress = min(epoch / self.total_epochs, 1.0)
+
+        if self.schedule_type == "cosine":
+            # Cosine decay (smoother transition)
+            weight = self.final + (self.initial - self.final) * 0.5 * (1 + math.cos(math.pi * progress))
+        else:
+            # Linear decay (default)
+            weight = self.initial + (self.final - self.initial) * progress
+
+        return max(weight, self.final)  # Ensure we don't go below final weight
+
 def build_dataloaders(cfg: Dict, fold: int):
     # Get backend type and data root
     backend = cfg["data"].get("backend", "png")  # Default to PNG for backward compatibility
@@ -275,6 +351,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     # Learning rate scheduler setup
     plateau_scheduler = None
     onecycle_scheduler = None
+    cosine_restarts_scheduler = None
 
     if cfg["train"]["scheduler"] == "plateau":
         plateau_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -292,6 +369,18 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             div_factor=25.0,  # initial_lr = max_lr/25
             final_div_factor=1e4  # min_lr = initial_lr/1e4
         )
+    elif cfg["train"]["scheduler"] == "cosine_restarts":
+        # SGDR: Cosine Annealing with Warm Restarts (Phase 1 fix for plateau)
+        T_0 = cfg["train"].get("T_0", 50)  # Initial restart period
+        T_mult = cfg["train"].get("T_mult", 2)  # Period multiplier after each restart
+        eta_min = cfg["train"].get("min_lr", 1e-5)  # Minimum learning rate
+        cosine_restarts_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            opt,
+            T_0=T_0,
+            T_mult=T_mult,
+            eta_min=eta_min
+        )
+        logger.info(f"Using SGDR scheduler: T_0={T_0}, T_mult={T_mult}, eta_min={eta_min}")
 
     # TensorBoard
     writer = None
@@ -313,8 +402,10 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     if resume_from is not None:
         logger.info(f"Resuming training from checkpoint: {resume_from}")
         from ..utils.io import load_training_state
-        # Pass the active scheduler (plateau or onecycle)
-        active_scheduler = plateau_scheduler if plateau_scheduler is not None else onecycle_scheduler
+        # Pass the active scheduler (plateau, onecycle, or cosine_restarts)
+        active_scheduler = plateau_scheduler if plateau_scheduler is not None else (
+            onecycle_scheduler if onecycle_scheduler is not None else cosine_restarts_scheduler
+        )
         resume_info = load_training_state(resume_from, model, opt, active_scheduler, scaler, device, expected_fold=fold)
         start_epoch = resume_info['epoch'] + 1  # Start from next epoch
         best_iou = resume_info['best_iou']
@@ -322,6 +413,17 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         step = start_epoch * len(train_loader)
         logger.info(f"  Starting from epoch {start_epoch}")
         logger.info(f"  Previous best IoU: {best_iou:.4f} at epoch {best_iou_epoch + 1}")
+
+    # Deep Supervision Scheduler (Phase 1 optimization)
+    ds_scheduler = None
+    if cfg["train"].get("aux_weight_initial") and cfg["train"].get("aux_weight_final"):
+        ds_scheduler = DeepSupervisionScheduler(
+            initial_weight=cfg["train"]["aux_weight_initial"],
+            final_weight=cfg["train"]["aux_weight_final"],
+            total_epochs=cfg["train"]["epochs"],
+            schedule_type="linear"
+        )
+        logger.info(f"Using Deep Supervision Scheduler: {cfg['train']['aux_weight_initial']} → {cfg['train']['aux_weight_final']}")
 
     # Early stopping
     early_stop_patience = cfg["train"].get("early_stop_patience", 30)
@@ -384,7 +486,13 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
                     # Deep supervision auxiliary losses (only for old loss system)
                     if aux_outputs is not None:
-                        aux_weights = cfg["train"].get("aux_loss_weights", [0.5, 0.25, 0.125])
+                        # Get dynamic aux weight from scheduler if available
+                        if ds_scheduler is not None:
+                            base_aux_weight = ds_scheduler.get_weight(epoch)
+                            aux_weights = [base_aux_weight * 1.0, base_aux_weight * 0.5, base_aux_weight * 0.25]
+                        else:
+                            aux_weights = cfg["train"].get("aux_loss_weights", [0.5, 0.25, 0.125])
+
                         for i, aux_output in enumerate(aux_outputs):
                             # Resize auxiliary output to match mask size
                             aux_resized = F.interpolate(aux_output, size=msk.shape[-2:],
@@ -401,10 +509,17 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
             scaler.scale(loss).backward()
 
-            # Apply gradient clipping before optimizer step
+            # Apply gradient clipping and centralization before optimizer step
             if (batch_idx + 1) % grad_accum_steps == 0:
+                # Unscale gradients first (needed for both clipping and centralization)
+                scaler.unscale_(opt)
+
+                # Phase 1: Gradient Centralization
+                if cfg["train"].get("gradient_centralization", False):
+                    centralized_gradient(opt)
+
+                # Gradient clipping (after centralization)
                 if cfg["train"].get("grad_clip_norm", 0) > 0:
-                    scaler.unscale_(opt)
                     torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip_norm"])
 
                 scaler.step(opt)
@@ -414,6 +529,10 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 # OneCycleLR step (per batch)
                 if onecycle_scheduler is not None:
                     onecycle_scheduler.step()
+
+                # CosineAnnealingWarmRestarts step (per batch)
+                if cosine_restarts_scheduler is not None:
+                    cosine_restarts_scheduler.step()
 
             if cfg["train"]["scheduler"] == "cosine":
                 _cosine_lr_with_warmup(opt, cfg["train"]["lr"], step, total_steps,
@@ -673,8 +792,10 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         ckpt_dir = cfg["logging"]["save_dir"]
         ensure_dir(ckpt_dir)
         last_ckpt_path = os.path.join(ckpt_dir, f"last_fold{fold}.pth")
-        # Save the active scheduler (plateau or onecycle)
-        active_scheduler = plateau_scheduler if plateau_scheduler is not None else onecycle_scheduler
+        # Save the active scheduler (plateau, onecycle, or cosine_restarts)
+        active_scheduler = plateau_scheduler if plateau_scheduler is not None else (
+            onecycle_scheduler if onecycle_scheduler is not None else cosine_restarts_scheduler
+        )
         save_training_state(last_ckpt_path, epoch, model, opt, active_scheduler, scaler,
                            best_iou, best_iou_epoch, cfg, fold=fold)
 

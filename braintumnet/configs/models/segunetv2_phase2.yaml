@@ -1,0 +1,86 @@
+# SegUNetV2 Phase 2 Configuration
+# Auto-loaded when --model segunetv2_phase2 is specified
+#
+# IMPROVEMENTS over Phase 1:
+# 1. Multi-Scale Transformer Bottleneck (patch sizes: 4, 8, 16)
+# 2. Attention Gates for skip connections
+#
+# Expected over Phase 1: +2-4% Dice
+# Expected over Baseline: +6-11% Dice (total)
+# Target: Dice 0.93-0.97
+
+model:
+  model_type: "v2"
+  in_channels: 4
+  num_classes_seg: 3
+  num_classes_cls: 2
+
+  # SegUNetV2 specific (same as Phase 1)
+  base: 64
+  dim: 512
+  patch_size: 8  # Not used when multi-scale is enabled
+  depth: 4
+  n_heads: 8
+  dropout: 0.2
+  norm: "instance"
+  roi_stop_grad: true
+  deep_supervision: true
+  multi_scale_fusion: true
+
+  # PHASE 1 FEATURES (inherited)
+  boundary_refinement: true
+
+  # PHASE 2 NEW FEATURES
+  use_multiscale_transformer: true  # Multi-scale transformer bottleneck
+  use_attention_gates: true         # Attention gates for skip connections
+
+# Training configuration (inherit from Phase 1)
+train:
+  cls_loss_weight: 0.5
+
+  # Phase 1 optimized weights
+  boundary_weight: 1.0
+  focal_alpha: [0.0, 0.35, 0.35]
+  class_weights: [1.0, 2.5, 3.0]
+
+  # Phase 1 deep supervision
+  aux_weight_initial: 0.5
+  aux_weight_final: 0.1
+
+  # Phase 1 SGDR scheduler
+  scheduler: "cosine_restarts"
+  T_0: 50
+  T_mult: 2
+  min_lr: 1.0e-6
+  warmup_steps: 3000
+  early_stop_patience: 50
+
+  # Phase 1 gradient centralization
+  gradient_centralization: true
+
+# Augmentation (same as Phase 1)
+augment:
+  rotate_deg: 45
+  hflip_p: 0.5
+  vflip_p: 0.5
+  scale_range: [0.9, 1.1]
+  brightness_range: [0.75, 1.25]
+  contrast_range: [0.75, 1.25]
+  gamma_range: [0.7, 1.4]
+  gaussian_noise_p: 0.2
+  gaussian_noise_std: 0.01
+
+  # Advanced medical augmentation
+  elastic_deform_p: 0.3
+  elastic_alpha: 30
+  elastic_sigma: 4
+  bias_field_p: 0.5
+  bias_field_scale: 0.3
+  gaussian_blur_p: 0.2
+  gaussian_blur_sigma: [0.5, 1.5]
+  gamma_p: 0.5
+  cutout_p: 0.2
+  cutout_n_holes: 3
+  cutout_size: 20
+  local_shuffle_p: 0.15
+  local_shuffle_size: 3

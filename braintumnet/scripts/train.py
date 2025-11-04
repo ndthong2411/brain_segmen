@@ -91,25 +91,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Train SegUNetV2 Phase 1 (OPTIMIZED) on A100
+  python scripts/train.py --model segunetv2_phase1 --cfg a100 --fold 0
+
+  # Train SegUNetV2 baseline
+  python scripts/train.py --model segunetv2 --fold 0
+
   # Train Swin-UNETR on default hardware (3090)
   python scripts/train.py --model swin_unetr --fold 0
 
   # Train Swin-UNETR on A100
   python scripts/train.py --model swin_unetr --cfg a100 --fold 0
 
-  # Train nnU-Net on A100
-  python scripts/train.py --model nnunet --cfg a100 --fold 0
-
-  # Train SegUNetV2 baseline
-  python scripts/train.py --model segunetv2 --fold 0
-
   # Resume training
-  python scripts/train.py --model swin_unetr --fold 0 --resume
+  python scripts/train.py --model segunetv2_phase1 --fold 0 --resume
         """
     )
 
     ap.add_argument("--model", type=str, default="segunetv2",
-                    choices=['segunetv2', 'v2', 'swin_unetr', 'nnunet', 'unetr', 'transunet', 'lg_unetr'],
+                    choices=['segunetv2', 'segunetv2_phase1', 'segunetv2_phase2', 'v2', 'swin_unetr', 'nnunet', 'unetr', 'transunet', 'lg_unetr'],
                     help="Model architecture (default: segunetv2)")
     ap.add_argument("--cfg", type=str, default=None,
                     choices=['a100'],

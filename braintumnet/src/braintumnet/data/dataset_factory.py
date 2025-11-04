@@ -80,6 +80,8 @@ def create_dataset(
 
     elif backend == "lmdb":
         print(f"  Using LMDB backend (LMDBDataset) - Fast loading!")
+        # Extract augmentation config for Phase 1 advanced augmentations
+        augment_config = cfg.get("augment", {}) if train else None
         return LMDBDataset(
             lmdb_root=data_root,
             split_file=split_file,
@@ -88,7 +90,8 @@ def create_dataset(
             hflip_p=hflip_p,
             vflip_p=vflip_p,
             train=train,
-            in_channels=in_channels
+            in_channels=in_channels,
+            augment_config=augment_config
         )
 
     else:
