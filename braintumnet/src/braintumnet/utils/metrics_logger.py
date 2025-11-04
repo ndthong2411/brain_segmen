@@ -75,13 +75,13 @@ class MetricsLogger:
         # Initialize CSV headers on first write
         if not self.csv_initialized:
             self.csv_headers = sorted(metrics_dict.keys())
-            with open(self.csv_path, 'w', newline='') as f:
+            with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=self.csv_headers)
                 writer.writeheader()
             self.csv_initialized = True
 
         # Append metrics
-        with open(self.csv_path, 'a', newline='') as f:
+        with open(self.csv_path, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=self.csv_headers)
             writer.writerow(metrics_dict)
 
@@ -95,7 +95,7 @@ class MetricsLogger:
                             for k, v in self.best_metrics.items()}
         }
 
-        with open(self.json_path, 'w') as f:
+        with open(self.json_path, 'w', encoding='utf-8') as f:
             json.dump(output, f, indent=2)
 
     def get_best_metrics(self):

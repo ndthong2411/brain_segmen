@@ -40,7 +40,7 @@ class TrainingLogger:
 
     def _write_header(self):
         """Write log file header."""
-        with open(self.log_file, 'w') as f:
+        with open(self.log_file, 'w', encoding='utf-8') as f:
             f.write("=" * 80 + "\n")
             f.write("BrainTumNet Training Log\n")
             f.write("=" * 80 + "\n")
@@ -60,8 +60,8 @@ class TrainingLogger:
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_msg = f"[{timestamp}] [{level}] {message}"
 
-        # Write to file
-        with open(self.log_file, 'a') as f:
+        # Write to file with UTF-8 encoding to support Unicode characters
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(formatted_msg + "\n")
 
         # Print to console
@@ -86,7 +86,7 @@ class TrainingLogger:
 
     def section(self, title):
         """Log a section header."""
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write("\n" + "-" * 80 + "\n")
             f.write(f"{title}\n")
             f.write("-" * 80 + "\n")
@@ -115,7 +115,7 @@ class TrainingLogger:
         metrics_str = ", ".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
         msg = f"[{timestamp}] Epoch {epoch+1}/{total_epochs} - {phase} - {metrics_str}"
 
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(msg + "\n")
 
         if self.console:
@@ -158,7 +158,7 @@ class TrainingLogger:
             best_metrics: Dictionary of best metrics
             total_time: Total training time in seconds
         """
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write("\n" + "=" * 80 + "\n")
             f.write("Training Complete!\n")
             f.write("=" * 80 + "\n")

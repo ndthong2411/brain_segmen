@@ -31,9 +31,9 @@ def multiclass_dice_coefficient(pred: torch.Tensor, target: torch.Tensor,
     Returns:
         Dice coefficient for the specified class
     """
-    # Get predictions for this class
-    pred_probs = torch.softmax(pred, dim=1)  # (B, C, H, W)
-    pred_class = pred_probs[:, class_idx, :, :]  # (B, H, W)
+    # Get HARD predictions using argmax
+    pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
+    pred_class = (pred_classes == class_idx).float()  # (B, H, W) - binary 0/1
 
     # Get ground truth for this class
     target_class = (target.squeeze(1) == class_idx).float()  # (B, H, W)
@@ -61,9 +61,9 @@ def multiclass_iou(pred: torch.Tensor, target: torch.Tensor,
     Returns:
         IoU for the specified class
     """
-    # Get predictions for this class
-    pred_probs = torch.softmax(pred, dim=1)  # (B, C, H, W)
-    pred_class = pred_probs[:, class_idx, :, :]  # (B, H, W)
+    # Get HARD predictions using argmax
+    pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
+    pred_class = (pred_classes == class_idx).float()  # (B, H, W) - binary 0/1
 
     # Get ground truth for this class
     target_class = (target.squeeze(1) == class_idx).float()  # (B, H, W)
@@ -104,12 +104,12 @@ def compute_brats_regions(pred: torch.Tensor, target: torch.Tensor,
     metrics = {}
     eps = 1e-6
 
-    # Get prediction probabilities
-    pred_probs = torch.softmax(pred, dim=1)  # (B, C, H, W)
+    # Get HARD predictions using argmax (not soft probabilities!)
+    pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
     target_squeezed = target.squeeze(1)  # (B, H, W)
 
     # --- TC (Tumor Core) = class 1 only ---
-    pred_tc = pred_probs[:, 1, :, :]  # (B, H, W)
+    pred_tc = (pred_classes == 1).float()  # (B, H, W) - binary 0/1
     target_tc = (target_squeezed == 1).float()  # (B, H, W)
 
     inter_tc = (pred_tc * target_tc).sum()
@@ -123,7 +123,7 @@ def compute_brats_regions(pred: torch.Tensor, target: torch.Tensor,
 
     # --- ED (Edema) = class 2 only ---
     if num_classes >= 3:
-        pred_ed = pred_probs[:, 2, :, :]  # (B, H, W)
+        pred_ed = (pred_classes == 2).float()  # (B, H, W) - binary 0/1
         target_ed = (target_squeezed == 2).float()  # (B, H, W)
 
         inter_ed = (pred_ed * target_ed).sum()
@@ -140,7 +140,7 @@ def compute_brats_regions(pred: torch.Tensor, target: torch.Tensor,
 
     # --- WT (Whole Tumor) = TC + ED (classes 1, 2) ---
     if num_classes >= 3:
-        pred_wt = pred_probs[:, 1:, :, :].sum(dim=1)  # (B, H, W) - sum TC and ED
+        pred_wt = (pred_classes >= 1).float()  # (B, H, W) - any tumor class
         target_wt = (target_squeezed >= 1).float()  # (B, H, W) - any tumor class
     else:
         pred_wt = pred_tc
@@ -198,12 +198,13 @@ class MulticlassMetricsAccumulator:
         """
         eps = 1e-6
 
-        # Get prediction probabilities
-        pred_probs = torch.softmax(pred, dim=1)  # (B, C, H, W)
+        # Get HARD predictions using argmax (not soft probabilities!)
+        # This is critical for correct Dice/IoU calculation
+        pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
         target_squeezed = target.squeeze(1)  # (B, H, W)
 
         # --- TC (Tumor Core) = class 1 only ---
-        pred_tc = pred_probs[:, 1, :, :]
+        pred_tc = (pred_classes == 1).float()  # (B, H, W) - binary 0/1
         target_tc = (target_squeezed == 1).float()
 
         self.inter_tc += (pred_tc * target_tc).sum().item()
@@ -211,7 +212,7 @@ class MulticlassMetricsAccumulator:
 
         # --- ED (Edema) = class 2 only ---
         if self.num_classes >= 3:
-            pred_ed = pred_probs[:, 2, :, :]
+            pred_ed = (pred_classes == 2).float()  # (B, H, W) - binary 0/1
             target_ed = (target_squeezed == 2).float()
 
             self.inter_ed += (pred_ed * target_ed).sum().item()
@@ -219,7 +220,7 @@ class MulticlassMetricsAccumulator:
 
         # --- WT (Whole Tumor) = TC + ED ---
         if self.num_classes >= 3:
-            pred_wt = pred_probs[:, 1:, :, :].sum(dim=1)  # Sum TC and ED
+            pred_wt = (pred_classes >= 1).float()  # Any tumor class
             target_wt = (target_squeezed >= 1).float()
         else:
             pred_wt = pred_tc
