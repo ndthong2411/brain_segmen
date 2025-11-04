@@ -19,10 +19,12 @@ def check_lmdb_data():
         'data': {
             'backend': 'lmdb',
             'data_root': 'braintumnet/data/lmdb_processed_multiclass_full',
-            'img_size': 256
+            'img_size': 256,
+            'in_channels': 4  # Added missing in_channels
         },
         'model': {
-            'num_classes_seg': 3
+            'num_classes_seg': 3,
+            'in_channels': 4  # Added missing in_channels
         },
         'augment': {
             'rotate_deg': 0,

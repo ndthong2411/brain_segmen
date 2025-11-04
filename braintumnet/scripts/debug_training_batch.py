@@ -50,7 +50,15 @@ def test_training_batch():
 
     # Build dataset
     print("\nBuilding dataset...")
-    data_root = cfg['data']['data_root']
+    # Get data root based on backend
+    backend = cfg['data']['backend']
+    if backend == 'lmdb':
+        data_root = cfg['data']['lmdb_root']
+    elif backend == 'png':
+        data_root = cfg['data']['proc_root']
+    else:
+        data_root = cfg['data'].get('data_root', cfg['data']['proc_root'])
+
     train_list = os.path.join(data_root, f"train_fold{cfg['data']['fold']}.csv")
 
     try:
