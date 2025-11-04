@@ -24,7 +24,7 @@ if sys.platform == 'win32':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "src"))
 
 import torch
 import yaml

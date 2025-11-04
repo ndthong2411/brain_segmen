@@ -6,7 +6,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Chỉ hiện errors
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Tắt oneDNN messages
 
 ROOT = Path(__file__).resolve().parents[1]  # braintumnet/
-sys.path.append(str(ROOT / "src"))
+# Prepend local src/ to sys.path so local package overrides any installed version
+sys.path.insert(0, str(ROOT / "src"))
 
 from braintumnet.utils.io import load_yaml
 from braintumnet.utils.seed import set_seed

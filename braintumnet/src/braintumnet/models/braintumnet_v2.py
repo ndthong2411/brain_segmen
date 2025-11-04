@@ -41,7 +41,8 @@ class BrainTumNetV2(nn.Module):
     """
     def __init__(self, in_ch=4, num_cls=2, base=48, dim=384, patch=8,
                  depth=4, n_heads=8, num_classes_seg=3, dropout=0.15,
-                 roi_stop_grad=True, deep_supervision=True, multi_scale_fusion=True):
+                 roi_stop_grad=True, deep_supervision=True, multi_scale_fusion=True,
+                 boundary_refinement=False, use_multiscale_transformer=False, use_attention_gates=False):
         super().__init__()
         self.num_classes_seg = num_classes_seg
         self.roi_stop_grad = roi_stop_grad
@@ -59,7 +60,10 @@ class BrainTumNetV2(nn.Module):
             dropout=dropout,
             norm='instance',
             deep_supervision=deep_supervision,
-            multi_scale_fusion=multi_scale_fusion
+            multi_scale_fusion=multi_scale_fusion,
+            boundary_refinement=boundary_refinement,
+            use_multiscale_transformer=use_multiscale_transformer,
+            use_attention_gates=use_attention_gates
         )
 
         # Channel reduction for ROI (multi-modal to single channel)

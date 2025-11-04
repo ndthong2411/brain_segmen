@@ -37,7 +37,7 @@ import numpy as np
 
 # Add src to path
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "src"))
 
 from braintumnet.data.brats2020_dataset import SliceDataset
 from braintumnet.data.lmdb_dataset import LMDBDataset

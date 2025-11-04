@@ -52,7 +52,7 @@ import shutil
 
 # Add src to path
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "src"))
 
 
 def load_multimodal_sample(input_dir, slice_id):

@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "src"))
 
 from braintumnet.utils.io import load_yaml
 from braintumnet.engine.evaluator import evaluate

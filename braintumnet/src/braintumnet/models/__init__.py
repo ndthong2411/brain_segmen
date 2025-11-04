@@ -46,6 +46,9 @@ def build_model(cfg: Dict):
             roi_stop_grad=mcfg.get("roi_stop_grad", True),
             deep_supervision=mcfg.get("deep_supervision", True),
             multi_scale_fusion=mcfg.get("multi_scale_fusion", True),
+            boundary_refinement=mcfg.get("boundary_refinement", False),
+            use_multiscale_transformer=mcfg.get("use_multiscale_transformer", False),
+            use_attention_gates=mcfg.get("use_attention_gates", False),
         )
 
     elif model_type == "swin_unetr":

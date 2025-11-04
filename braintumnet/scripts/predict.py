@@ -6,7 +6,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "src"))
 
 from braintumnet.utils.io import load_yaml, load_ckpt
 from braintumnet.models.braintumnet import BrainTumNet
