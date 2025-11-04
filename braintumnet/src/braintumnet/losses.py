@@ -526,13 +526,23 @@ class MulticlassFocalLoss(nn.Module):
         self.num_classes = num_classes
         self.gamma = gamma
 
-        # Set alpha (class weights)
+        # Normalize alpha weights to match number of classes
         if alpha is None:
             alpha = [1.0] * num_classes
-        if ignore_background:
-            alpha[0] = 0.0  # Ignore background
+        elif isinstance(alpha, torch.Tensor):
+            alpha = alpha.detach().cpu().flatten().tolist()
+        else:
+            alpha = [float(a) for a in alpha]
 
-        self.alpha = torch.tensor(alpha, dtype=torch.float32)
+        if len(alpha) < num_classes:
+            alpha = alpha + [alpha[-1]] * (num_classes - len(alpha))
+        elif len(alpha) > num_classes:
+            alpha = alpha[:num_classes]
+
+        if ignore_background and num_classes > 0:
+            alpha[0] = 0.0  # Ignore background in the loss
+
+        self.register_buffer('alpha', torch.tensor(alpha, dtype=torch.float32))
 
     def forward(self, logits, targets):
         """
@@ -540,9 +550,6 @@ class MulticlassFocalLoss(nn.Module):
             logits: (B, C, H, W)
             targets: (B, 1, H, W)
         """
-        # Move alpha to same device as logits
-        self.alpha = self.alpha.to(logits.device)
-
         # Get probabilities
         probs = torch.softmax(logits, dim=1)  # (B, C, H, W)
 
@@ -550,22 +557,22 @@ class MulticlassFocalLoss(nn.Module):
         targets = targets.squeeze(1).long()  # (B, H, W)
 
         # Flatten
-        probs = probs.permute(0, 2, 3, 1).reshape(-1, self.num_classes)  # (B*H*W, C)
-        targets = targets.reshape(-1)  # (B*H*W,)
+        probs_flat = probs.permute(0, 2, 3, 1).reshape(-1, self.num_classes)  # (B*H*W, C)
+        targets_flat = targets.reshape(-1)  # (B*H*W,)
 
         # Get probabilities of true class
-        pt = probs[torch.arange(len(targets)), targets]  # (B*H*W,)
+        idx = torch.arange(targets_flat.numel(), device=targets_flat.device)
+        pt = probs_flat[idx, targets_flat].clamp_min(1e-7)  # (B*H*W,)
 
         # Focal weight
         focal_weight = (1 - pt) ** self.gamma
 
         # Class weight
-        alpha_t = self.alpha[targets]
+        alpha = self.alpha.to(logits.device)
+        alpha_t = alpha[targets_flat]
 
-        # CrossEntropy loss
-        ce_loss = torch.nn.functional.cross_entropy(
-            probs, targets, reduction='none'
-        )
+        # Cross entropy on probabilities (without re-applying softmax)
+        ce_loss = -torch.log(pt)
 
         # Combine
         focal_loss = alpha_t * focal_weight * ce_loss
