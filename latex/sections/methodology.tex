@@ -1,0 +1,301 @@
+\section{Methodology}
+
+\subsection{Overview}
+
+BrainTumNetV2 is a multi-task learning framework that simultaneously performs 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) from multi-modal MRI input. The architecture consists of three main components: (1) SegUNetV2, an enhanced U-Net with residual blocks, attention mechanisms, and multi-scale fusion for segmentation; (2) an adaptive masked transformer bottleneck for global context modeling; and (3) TInceptionNet, an inception-based classification network guided by segmentation ROI. Figure~\ref{fig:architecture} illustrates the overall architecture.
+
+Given a 4-channel input $\mathbf{X} \in \mathbb{R}^{4 \times H \times W}$ representing FLAIR, T1, T1CE, and T2 modalities, the network produces segmentation logits $\mathbf{S} \in \mathbb{R}^{3 \times H \times W}$ for three classes and classification logits $\mathbf{C} \in \mathbb{R}^{2}$ for HGG/LGG. The model is trained end-to-end using a combined loss function that integrates segmentation and classification objectives.
+
+\subsection{SegUNetV2: Enhanced Segmentation Network}
+
+\subsubsection{Architectural Improvements}
+
+SegUNetV2 builds upon U-Net with several critical enhancements designed for medical imaging:
+
+\textbf{Residual Convolutional Blocks.} Instead of plain convolutions, we use residual blocks with pre-activation structure:
+\begin{equation}
+\mathbf{y} = \text{LeakyReLU}(\mathbf{x} + \mathcal{F}(\mathbf{x}))
+\end{equation}
+where $\mathcal{F}(\mathbf{x}) = \text{Conv}(\text{IN}(\text{LeakyReLU}(\text{Conv}(\text{IN}(\text{LeakyReLU}(\mathbf{x}))))))$. The residual connection enables training of deeper networks and improves gradient flow. The structure is: Conv-IN-LeakyReLU $\rightarrow$ Conv-IN $\rightarrow$ Add $\rightarrow$ LeakyReLU, where IN denotes instance normalization and the final activation is applied after residual addition.
+
+\textbf{Instance Normalization.} We replace batch normalization with instance normalization:
+\begin{equation}
+\text{IN}(x_{bcij}) = \frac{x_{bcij} - \mu_{bc}}{\sqrt{\sigma_{bc}^2 + \epsilon}}
+\end{equation}
+where statistics $\mu_{bc}$ and $\sigma_{bc}$ are computed per-instance and per-channel. This choice is motivated by medical imaging characteristics: (1) independence from batch size enables stable training with small batches; (2) normalization per-instance prevents cross-contamination between patients; and (3) better handling of intensity variations across different scanners and protocols.
+
+\textbf{LeakyReLU Activation.} We use LeakyReLU with negative slope $\alpha=0.01$ instead of ReLU:
+\begin{equation}
+\text{LeakyReLU}(x) = \begin{cases} x & \text{if } x > 0 \\ 0.01x & \text{otherwise} \end{cases}
+\end{equation}
+This prevents dying neurons in deep networks and provides non-zero gradients for negative activations, improving optimization stability.
+
+\textbf{Learned Downsampling.} Max pooling is replaced with strided convolutions ($3\times3$, stride 2) for downsampling:
+\begin{equation}
+\mathbf{x}_{\text{down}} = \text{Conv}_{3\times3,s=2}(\mathbf{x})
+\end{equation}
+This allows the network to learn optimal downsampling operations rather than using fixed max pooling, potentially preserving more relevant information for subsequent layers.
+
+\subsubsection{Encoder Path}
+
+The encoder consists of four encoder blocks with progressively increasing channels. For base channel count $b$, the channel progression is: $b \rightarrow 2b \rightarrow 4b \rightarrow 8b$. We use $b=48$ for the small variant (37M parameters) and $b=64$ for the large variant (87M parameters). Each encoder block:
+\begin{align}
+\mathbf{s}_i, \mathbf{x}_i &= \text{EncoderBlock}(\mathbf{x}_{i-1}) \\
+\mathbf{s}_i &= \text{ResConvBlock}(\mathbf{x}_{i-1}) \\
+\mathbf{x}_i &= \text{Conv}_{3\times3,s=2}(\mathbf{s}_i)
+\end{align}
+where $\mathbf{s}_i$ is the skip connection and $\mathbf{x}_i$ is the downsampled feature for the next level. Dropout with rate 0.15 is applied in deeper layers ($i \geq 3$) for regularization.
+
+\subsubsection{Adaptive Masked Transformer Bottleneck}
+
+At the lowest resolution ($H/8 \times W/8$), features are processed by an adaptive masked transformer that combines local CNN features with global context:
+
+\textbf{Patch Embedding.} Features are projected and divided into patches:
+\begin{align}
+\mathbf{f} &= \text{Conv}_{1\times1}(\mathbf{x}_4) \in \mathbb{R}^{d \times H' \times W'} \\
+\mathbf{t} &= \text{PatchEmbed}_{p \times p}(\mathbf{f}) \in \mathbb{R}^{N \times d}
+\end{align}
+where $d$ is the transformer dimension (384 for small, 512 for large), $p=8$ is the patch size, $N = (H'/p) \times (W'/p)$ is the number of patches, and features are flattened and normalized with LayerNorm.
+
+\textbf{Adaptive Soft Masking.} Instead of hard attention masks, we compute continuous soft masks that weight the contribution of each patch:
+\begin{align}
+\mathbf{m} &= \text{Sigmoid}(\text{MLP}(\mathbf{t})) \in \mathbb{R}^{H \times N} \\
+\text{MLP} &: \mathbb{R}^{d} \rightarrow \mathbb{R}^{H}
+\end{align}
+where $H=8$ is the number of attention heads. The MLP consists of two linear layers with GELU activation: $d \rightarrow d/2 \rightarrow H$. These soft masks allow the network to adaptively focus on tumor-relevant regions while maintaining differentiability.
+
+\textbf{Masked Self-Attention.} The transformer applies multi-head self-attention with soft masking:
+\begin{align}
+\mathbf{Q}, \mathbf{K}, \mathbf{V} &= \mathbf{W}_Q\mathbf{t}, \mathbf{W}_K\mathbf{t}, \mathbf{W}_V\mathbf{t} \\
+\mathbf{A} &= \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_h}} + \log(\mathbf{m} + \epsilon)\right) \\
+\text{out} &= \mathbf{A}\mathbf{V}
+\end{align}
+where $d_h = d/H$ is the head dimension, and the soft mask $\mathbf{m}$ is applied as additive log-space bias to the attention logits before softmax. This allows the network to down-weight non-tumor regions while preserving gradient flow. The attention is followed by feed-forward network with expansion ratio 4.0:
+\begin{equation}
+\text{FFN}(\mathbf{x}) = \text{GELU}(\mathbf{x}\mathbf{W}_1)\mathbf{W}_2
+\end{equation}
+where $\mathbf{W}_1 \in \mathbb{R}^{d \times 4d}$ and $\mathbf{W}_2 \in \mathbb{R}^{4d \times d}$.
+
+We use $L=4$ transformer blocks with residual connections and layer normalization:
+\begin{align}
+\mathbf{t}' &= \mathbf{t} + \text{MSA}(\text{LN}(\mathbf{t}), \mathbf{m}) \\
+\mathbf{t}'' &= \mathbf{t}' + \text{FFN}(\text{LN}(\mathbf{t}'))
+\end{align}
+
+After transformation, patches are reshaped back to spatial dimensions and upsampled via transposed convolution to match the encoder output size.
+
+\subsubsection{Decoder Path with Attention and Multi-Scale Fusion}
+
+The decoder consists of four decoder blocks with channel progression $8b \rightarrow 8b \rightarrow 4b \rightarrow 2b \rightarrow b$. Each decoder block:
+\begin{align}
+\mathbf{u}_i &= \text{ConvTranspose}_{2\times2,s=2}(\mathbf{x}_i) \\
+\mathbf{s}_i' &= \text{CBAM}(\mathbf{s}_i) \\
+\mathbf{c}_i &= \text{Concat}([\mathbf{u}_i, \mathbf{s}_i']) \\
+\mathbf{d}_i &= \text{ResConvBlock}(\mathbf{c}_i)
+\end{align}
+
+\textbf{CBAM Attention.} Skip connections are refined using Convolutional Block Attention Module:
+\begin{align}
+\mathbf{s}' &= \mathbf{s} \odot \text{ChannelAttn}(\mathbf{s}) \\
+\mathbf{s}'' &= \mathbf{s}' \odot \text{SpatialAttn}(\mathbf{s}')
+\end{align}
+
+Channel attention uses both average and max pooling followed by shared MLP:
+\begin{equation}
+\text{ChannelAttn}(\mathbf{s}) = \sigma(\text{MLP}(\text{AvgPool}(\mathbf{s})) + \text{MLP}(\text{MaxPool}(\mathbf{s})))
+\end{equation}
+where the MLP has structure $C \rightarrow C/16 \rightarrow C$ with ReLU activation and reduction ratio 16.
+
+Spatial attention aggregates channel information via pooling:
+\begin{equation}
+\text{SpatialAttn}(\mathbf{s}) = \sigma(\text{Conv}_{7\times7}([\text{AvgPool}_C(\mathbf{s}); \text{MaxPool}_C(\mathbf{s})]))
+\end{equation}
+where pooling is performed along the channel dimension and concatenated features are processed by a $7\times7$ convolution.
+
+\textbf{Multi-Scale Feature Fusion.} To capture information at multiple resolutions, we fuse features from all decoder levels:
+\begin{align}
+\mathbf{f}_i &= \text{Conv}_{1\times1}(\mathbf{d}_i) \quad \forall i \in \{1,2,3,4\} \\
+\mathbf{f}_i^{\uparrow} &= \text{Interpolate}(\mathbf{f}_i, \text{size}=(H, W)) \\
+\mathbf{f}_{\text{fused}} &= \text{LeakyReLU}(\text{IN}(\sum_{i=1}^{4} \mathbf{f}_i^{\uparrow}))
+\end{align}
+where all features are first projected to base channel dimension $b$, upsampled to the original resolution via bilinear interpolation, and summed. The fused features are concatenated with the final decoder output $\mathbf{d}_1$ and processed by a residual block:
+\begin{equation}
+\mathbf{f}_{\text{final}} = \text{ResConvBlock}(\text{Concat}([\mathbf{d}_1, \mathbf{f}_{\text{fused}}]))
+\end{equation}
+
+\subsubsection{Segmentation Head with Deep Supervision}
+
+The final segmentation is produced by a $1\times1$ convolution:
+\begin{equation}
+\mathbf{S}_{\text{main}} = \text{Conv}_{1\times1}(\mathbf{f}_{\text{final}}) \in \mathbb{R}^{3 \times H \times W}
+\end{equation}
+
+For deep supervision, we attach auxiliary heads at three intermediate decoder levels:
+\begin{align}
+\mathbf{S}_{\text{aux3}} &= \text{Conv}_{1\times1}(\mathbf{d}_3) \in \mathbb{R}^{3 \times H/4 \times W/4} \\
+\mathbf{S}_{\text{aux2}} &= \text{Conv}_{1\times1}(\mathbf{d}_2) \in \mathbb{R}^{3 \times H/2 \times W/2} \\
+\mathbf{S}_{\text{aux1}} &= \text{Conv}_{1\times1}(\mathbf{d}_1) \in \mathbb{R}^{3 \times H \times W}
+\end{align}
+These auxiliary outputs provide additional supervision at multiple scales, improving gradient flow to earlier layers and preventing vanishing gradients in the deep network.
+
+\subsection{ROI-Guided Classification Network}
+
+\subsubsection{ROI Extraction}
+
+The classification branch uses segmentation predictions to guide feature extraction. The whole tumor probability is computed from segmentation logits:
+\begin{align}
+\mathbf{P} &= \text{softmax}(\mathbf{S}_{\text{main}}) \in \mathbb{R}^{3 \times H \times W} \\
+\mathbf{P}_{\text{WT}} &= \mathbf{P}_1 + \mathbf{P}_2 \in \mathbb{R}^{H \times W}
+\end{align}
+where $\mathbf{P}_1$ and $\mathbf{P}_2$ correspond to tumor core and edema classes, respectively. The whole tumor probability serves as a soft attention mask.
+
+The input is channel-reduced and masked:
+\begin{align}
+\mathbf{R} &= \text{Conv}_{1\times1}(\mathbf{X}) \in \mathbb{R}^{1 \times H \times W} \\
+\mathbf{R}_{\text{masked}} &= \mathbf{R} \odot \text{detach}(\mathbf{P}_{\text{WT}})
+\end{align}
+where $\text{detach}$ stops gradient flow from classification to segmentation, preventing task interference.
+
+\subsubsection{T-Inception Architecture}
+
+The classification network uses inception-style multi-scale convolutions:
+\begin{equation}
+\text{TInceptionBlock}(\mathbf{x}) = \text{Concat}([B_1(\mathbf{x}), B_2(\mathbf{x}), B_3(\mathbf{x}), B_4(\mathbf{x})])
+\end{equation}
+where each branch captures features at different scales:
+\begin{align}
+B_1 &: \text{Conv}_{1\times1} \\
+B_2 &: \text{Conv}_{3\times3} \\
+B_3 &: \text{Conv}_{1\times3} \\
+B_4 &: \text{Conv}_{3\times1}
+\end{align}
+
+Each branch uses the structure: Conv-BN-ReLU, with batch normalization and ReLU activation. The concatenated features are fused via $1\times1$ convolution followed by BN and ReLU.
+
+The network structure is:
+\begin{align}
+\mathbf{h}_0 &= \text{Conv}_{3\times3}(\mathbf{R}_{\text{masked}}) \in \mathbb{R}^{64 \times H \times W} \\
+\mathbf{h}_1 &= \text{TInceptionBlock}(\mathbf{h}_0) \in \mathbb{R}^{128 \times H \times W} \\
+\mathbf{h}_2 &= \text{TInceptionBlock}(\mathbf{h}_1) \in \mathbb{R}^{256 \times H \times W} \\
+\mathbf{h}_{\text{pool}} &= \text{AdaptiveAvgPool}(\mathbf{h}_2) \in \mathbb{R}^{256} \\
+\mathbf{C} &= \text{Linear}(\text{Dropout}_{0.3}(\mathbf{h}_{\text{pool}})) \in \mathbb{R}^{2}
+\end{align}
+where dropout with rate 0.3 is applied before the final fully connected layer to prevent overfitting.
+
+\subsection{Ultimate Combined Loss Function}
+
+The training objective combines segmentation and classification losses:
+\begin{equation}
+\mathcal{L}_{\text{total}} = w_{\text{seg}} \mathcal{L}_{\text{seg}} + w_{\text{cls}} \mathcal{L}_{\text{cls}}
+\end{equation}
+where $w_{\text{seg}} = 1.0$ and $w_{\text{cls}} = 0.5$ balance the two tasks.
+
+\subsubsection{Segmentation Loss Components}
+
+The segmentation loss integrates four complementary objectives:
+\begin{equation}
+\mathcal{L}_{\text{seg}} = w_D \mathcal{L}_{\text{Dice}} + w_F \mathcal{L}_{\text{Focal}} + w_I \mathcal{L}_{\text{IoU}} + w_B \mathcal{L}_{\text{Boundary}}
+\end{equation}
+with weights $w_D=1.0$, $w_F=1.0$, $w_I=2.5$, $w_B=0.6$.
+
+\textbf{Multi-Class Dice Loss.} Dice loss directly optimizes region overlap:
+\begin{equation}
+\mathcal{L}_{\text{Dice}} = 1 - \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{2 \sum_{i} p_{ci} g_{ci} + \epsilon}{\sum_{i} p_{ci} + \sum_{i} g_{ci} + \epsilon}
+\end{equation}
+where $p_{ci} = \text{softmax}(\mathbf{S})_{ci}$ is the predicted probability for class $c$ at pixel $i$, $g_{ci}$ is the one-hot ground truth, $\epsilon=10^{-6}$ is smoothing, and we exclude background ($c=0$) to focus on tumor classes. Class weights $[1.0, 3.0, 4.0]$ for background, tumor core, and edema are applied, emphasizing the harder edema class.
+
+\textbf{Multi-Class Focal Loss.} Focal loss addresses class imbalance by focusing on hard examples:
+\begin{equation}
+\mathcal{L}_{\text{Focal}} = -\frac{1}{N} \sum_{i} \sum_{c=1}^{C-1} \alpha_c (1 - p_{ci})^{\gamma} \log(p_{ci})
+\end{equation}
+where $\alpha_c = [0.0, 0.4, 0.3]$ for background, tumor core, and edema weight different classes, and $\gamma=3.0$ provides strong focusing on hard examples (higher than typical $\gamma=2.0$). The high gamma value aggressively down-weights easy examples, forcing the network to focus on challenging tumor boundaries and small regions.
+
+\textbf{IoU Loss.} IoU loss directly optimizes the evaluation metric:
+\begin{equation}
+\mathcal{L}_{\text{IoU}} = 1 - \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{\sum_{i} p_{ci} g_{ci} + \epsilon}{\sum_{i} p_{ci} + \sum_{i} g_{ci} - \sum_{i} p_{ci} g_{ci} + \epsilon}
+\end{equation}
+with higher weight $w_I=2.5$ to emphasize this target metric. IoU is stricter than Dice, penalizing false positives and false negatives more heavily.
+
+\textbf{Boundary Loss.} Boundary loss emphasizes accurate edge delineation using distance transforms:
+\begin{equation}
+\mathcal{L}_{\text{Boundary}} = \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{1}{N} \sum_{i} w_i^c |p_{ci} - g_{ci}|
+\end{equation}
+where $w_i^c = \exp(-|D_c(i)|/\theta)$ is computed from the signed distance transform $D_c$ of the ground truth mask for class $c$, with decay parameter $\theta=5$ pixels. This weights boundary pixels more heavily, encouraging precise tumor delineation.
+
+\subsubsection{Deep Supervision}
+
+Deep supervision is applied by computing the full segmentation loss at auxiliary outputs:
+\begin{align}
+\mathcal{L}_{\text{seg,total}} &= \mathcal{L}_{\text{seg}}(\mathbf{S}_{\text{main}}, \mathbf{G}) \\
+&\quad + w_{\text{aux}} \sum_{k \in \{3,2,1\}} \mathcal{L}_{\text{seg}}(\mathbf{S}_{\text{aux}k}, \mathbf{G}_{\text{scaled}})
+\end{align}
+where $w_{\text{aux}}=0.3$ weights auxiliary losses, and ground truth $\mathbf{G}$ is downsampled to match each auxiliary output resolution using nearest-neighbor interpolation. This provides direct supervision at multiple scales, improving gradient flow and preventing vanishing gradients.
+
+\subsubsection{Classification Loss}
+
+Standard cross-entropy loss is used for binary classification:
+\begin{equation}
+\mathcal{L}_{\text{cls}} = -\frac{1}{B} \sum_{b=1}^{B} \log\left(\frac{\exp(\mathbf{C}_b[y_b])}{\sum_{k=0}^{1} \exp(\mathbf{C}_b[k])}\right)
+\end{equation}
+where $B$ is batch size, $\mathbf{C}_b$ is the classification logits for sample $b$, and $y_b \in \{0,1\}$ is the true label (0=LGG, 1=HGG).
+
+\subsection{Training Strategy}
+
+\subsubsection{Optimization}
+
+We use AdamW optimizer with weight decay regularization:
+\begin{equation}
+\theta_{t+1} = \theta_t - \alpha_t (\hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon) + \lambda \theta_t)
+\end{equation}
+where $\hat{m}_t$ and $\hat{v}_t$ are bias-corrected first and second moment estimates, $\alpha_t$ is the learning rate, $\lambda=1.5 \times 10^{-4}$ is weight decay, and $\epsilon=10^{-8}$. AdamW decouples weight decay from gradient-based updates, providing more effective regularization than standard Adam.
+
+Learning rate is set to $\alpha_0 = 5 \times 10^{-5}$ for the large variant and $3 \times 10^{-5}$ for the small variant. We use cosine annealing with warm-up:
+\begin{equation}
+\alpha_t = \begin{cases}
+\alpha_0 \frac{t}{T_{\text{warmup}}} & t \leq T_{\text{warmup}} \\
+\alpha_{\text{min}} + \frac{1}{2}(\alpha_0 - \alpha_{\text{min}})(1 + \cos(\pi \frac{t - T_{\text{warmup}}}{T_{\text{max}} - T_{\text{warmup}}})) & t > T_{\text{warmup}}
+\end{cases}
+\end{equation}
+where $T_{\text{warmup}}=2000$ steps for large variant and 1000 for small, $\alpha_{\text{min}} = 5 \times 10^{-7}$, and $T_{\text{max}}$ is total training steps. Warm-up prevents instability in early training when batch normalization statistics are not yet stable.
+
+Gradient clipping with maximum norm 1.0 prevents exploding gradients:
+\begin{equation}
+\mathbf{g} \leftarrow \min\left(1, \frac{1.0}{\|\mathbf{g}\|_2}\right) \mathbf{g}
+\end{equation}
+
+\subsubsection{Mixed Precision Training}
+
+We employ automatic mixed precision (AMP) with BFloat16 on A100 GPUs or Float16 on other hardware. The forward pass uses lower precision:
+\begin{equation}
+\mathbf{y} = f(\mathbf{x}; \theta_{\text{fp16}})
+\end{equation}
+while maintaining master weights in FP32 and using loss scaling for gradients:
+\begin{equation}
+\mathbf{g}_{\text{fp32}} = \text{scale}^{-1} \cdot \frac{\partial (\text{scale} \cdot \mathcal{L})}{\partial \theta_{\text{fp16}}}
+\end{equation}
+This reduces memory usage by approximately 50\% and accelerates training by 1.5-2$\times$ while maintaining numerical stability.
+
+\subsubsection{Data Augmentation}
+
+Aggressive augmentation is applied during training:
+\begin{itemize}
+\item Horizontal/vertical flipping (probability 0.5)
+\item Random rotation $\pm 45^{\circ}$ with bilinear interpolation for images and nearest-neighbor for masks
+\item Brightness/contrast adjustment (range $\pm 25\%$)
+\item Gaussian noise ($\sigma=0.01$, probability 0.2)
+\end{itemize}
+
+All augmentations preserve the label space for masks and maintain spatial correspondence between modalities.
+
+\subsubsection{Hardware-Specific Optimizations}
+
+For A100 GPUs (80GB VRAM), we use:
+\begin{itemize}
+\item Batch size 16 (large variant)
+\item Channels-last memory format for better tensor core utilization
+\item Persistent workers to avoid DataLoader overhead
+\item Increased prefetch factor (8) for better pipeline throughput
+\item Fused AdamW operations
+\end{itemize}
+
+Training the large variant takes approximately 27 hours for 400 epochs on a single A100, while the small variant requires 47 hours on RTX 3090 (24GB).

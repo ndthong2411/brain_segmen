@@ -1,0 +1,31 @@
+\section{Related Work}
+
+\subsection{Brain Tumor Segmentation}
+
+Deep learning has revolutionized medical image segmentation, with U-Net \cite{ronneberger2015unet} establishing the encoder-decoder architecture as the de facto standard. The original U-Net uses skip connections to combine low-level spatial details with high-level semantic information, achieving strong performance on various medical imaging tasks. However, vanilla U-Net has several limitations: max pooling loses spatial information, batch normalization assumes large batch sizes, and ReLU activation can suffer from dying neurons in deep networks.
+
+Subsequent works have proposed various improvements. Attention U-Net \cite{oktay2018attention} introduced attention gates to suppress irrelevant features in skip connections. U-Net++ \cite{zhou2018unet++} used nested and dense skip connections for better gradient flow. nnU-Net \cite{isensee2021nnu} provided a self-configuring framework that automatically adapts to different datasets, achieving state-of-the-art results across multiple challenges.
+
+For brain tumor segmentation specifically, the BraTS challenge \cite{menze2015brats} has driven significant progress. Early approaches used hand-crafted features and traditional machine learning. Modern deep learning methods have achieved impressive results, with top-performing methods typically using 3D U-Net variants, heavy data augmentation, and ensemble strategies. However, these methods often focus solely on segmentation without considering the related task of tumor grading.
+
+\subsection{Transformer-Based Medical Image Segmentation}
+
+The success of transformers in natural language processing and computer vision has inspired their application to medical imaging. Vision Transformer (ViT) \cite{dosovitskiy2020image} demonstrated that pure transformer architectures can match or exceed CNNs on image classification. For segmentation, several hybrid approaches have emerged. TransUNet \cite{chen2021transunet} combined CNN encoders with transformer layers for global context. Swin-Unet \cite{cao2022swin} employed shifted window attention for hierarchical feature learning. UNETR \cite{hatamizadeh2022unetr} used a pure transformer encoder with CNN decoder.
+
+While transformers excel at capturing long-range dependencies through self-attention, they have limitations in medical imaging: (1) quadratic computational complexity with respect to sequence length makes them expensive for high-resolution images; (2) they require large amounts of training data, which is scarce in medical domains; and (3) they may lose fine-grained spatial details critical for precise boundary delineation. Our adaptive masked transformer addresses these issues by focusing computation on relevant regions and integrating tightly with CNN components.
+
+\subsection{Multi-Task Learning for Medical Imaging}
+
+Multi-task learning leverages the relatedness of multiple tasks to improve generalization through shared representations \cite{caruana1997multitask}. In medical imaging, several works have explored joint segmentation and classification. H-DenseUNet \cite{li2018hdenseunet} used hybrid densely connected networks for liver lesion segmentation and classification. Y-Net \cite{mehta2018ynet} proposed a dual-branch architecture for simultaneous segmentation and classification.
+
+For brain tumor analysis, some methods perform joint segmentation and grading. However, most approaches use simple feature sharing or independent task heads, without explicit mechanisms to guide classification using segmentation information. Our ROI-guided multi-task learning explicitly uses predicted tumor regions to focus classification on relevant areas, with gradient stopping to prevent task interference.
+
+\subsection{Loss Functions for Medical Image Segmentation}
+
+Beyond architecture design, loss function choice critically impacts segmentation performance. Cross-entropy loss, while standard, struggles with class imbalance. Dice loss \cite{milletari2016vnet} directly optimizes the Dice coefficient but can be unstable for small objects. Focal loss \cite{lin2017focal} addresses class imbalance by down-weighting easy examples. Tversky loss \cite{salehi2017tversky} generalizes Dice by weighting false positives and false negatives differently. Boundary loss \cite{kervadec2019boundary} uses distance transforms to emphasize boundary precision.
+
+Recent works have explored combining multiple loss functions. The challenge lies in finding appropriate weights and ensuring the combined loss addresses all relevant optimization challenges. Our ultimate combined loss integrates four complementary components with carefully tuned weights derived from the specific failure modes observed in brain tumor segmentation: Dice for stable region optimization, focal for class imbalance with strong focusing ($\gamma=3.0$), IoU for direct metric optimization, and boundary for edge precision.
+
+\subsection{Deep Supervision}
+
+Deep supervision \cite{lee2015deeply} adds auxiliary loss functions at intermediate network layers to improve gradient flow and feature learning. For medical image segmentation, deep supervision has been shown to accelerate convergence and improve final performance \cite{zhou2018unet++}. Our method employs deep supervision at three decoder levels with weight $0.3$, applying the full combined loss at each level to ensure consistent multi-scale feature learning.

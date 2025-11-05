@@ -1,0 +1,23 @@
+\section{Introduction}
+
+Brain tumors represent one of the most challenging pathologies in medical imaging, with gliomas accounting for approximately 80\% of all malignant brain tumors. Accurate segmentation of tumor sub-regions and classification of tumor grade (High-Grade Glioma (HGG) versus Low-Grade Glioma (LGG)) from multi-modal magnetic resonance imaging (MRI) scans are critical for treatment planning, surgical intervention, and prognosis assessment. However, these tasks remain challenging due to several factors: (1) high inter-patient variability in tumor appearance, size, and location; (2) irregular and ambiguous tumor boundaries; (3) severe class imbalance between healthy tissue and tumor regions; and (4) the need for multi-modal information integration from different MRI sequences (FLAIR, T1, T1CE, T2).
+
+Traditional approaches to brain tumor analysis typically address segmentation and classification as separate tasks, leading to sub-optimal performance and inefficient use of shared features. Recent advances in deep learning have demonstrated the potential of multi-task learning frameworks that jointly optimize related objectives, enabling better feature representations through shared learning \cite{ronneberger2015unet}. However, existing methods face several limitations: (1) pure CNN-based architectures struggle to capture long-range dependencies critical for understanding tumor context; (2) pure transformer-based methods are computationally expensive and may lose fine-grained spatial details; and (3) standard loss functions (e.g., Dice loss, cross-entropy) often fail to address the specific challenges of medical image segmentation, such as boundary precision and metric optimization.
+
+In this paper, we propose BrainTumNetV2, a novel hybrid CNN-transformer architecture with multi-task learning that addresses these limitations through several key contributions:
+
+\begin{itemize}
+\item \textbf{Enhanced U-Net Segmentation Network:} We design SegUNetV2, an improved U-Net architecture featuring residual convolutional blocks with instance normalization and LeakyReLU activation, learned downsampling via strided convolutions instead of max pooling, CBAM (Convolutional Block Attention Module) attention on skip connections, and multi-scale feature fusion combining outputs from all decoder levels for capturing both semantic and spatial information.
+
+\item \textbf{Adaptive Masked Transformer Bottleneck:} We introduce a transformer-based bottleneck that processes patch-embedded features with adaptive soft masking, allowing the network to focus computational resources on tumor-relevant regions while maintaining global context modeling capabilities.
+
+\item \textbf{ROI-Guided Multi-Task Learning:} We propose a multi-task framework that performs simultaneous 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG). The classification branch uses ROI-guided input masking based on predicted tumor regions, with gradient stopping to prevent interference with segmentation learning.
+
+\item \textbf{Ultimate Combined Loss Function:} We design a comprehensive loss function that combines Dice loss for region overlap, focal loss with strong focusing ($\gamma=3.0$) for class imbalance, IoU loss (weighted $2.5\times$) for direct metric optimization, and boundary loss for precise edge delineation. Deep supervision with auxiliary outputs at multiple decoder levels (weights $0.3$) further improves gradient flow and feature learning.
+
+\item \textbf{Computational Efficiency:} Despite the hybrid architecture, our method maintains practical efficiency with 37M parameters (small variant) to 87M parameters (large variant), achieving competitive performance with reasonable computational costs suitable for clinical deployment.
+\end{itemize}
+
+Extensive experiments on the BraTS 2020 dataset demonstrate the effectiveness of our approach. Our method achieves strong performance across all tumor sub-regions while maintaining computational efficiency and providing accurate tumor grade classification. The combination of architectural innovations and carefully designed loss functions enables BrainTumNetV2 to address the key challenges in brain tumor analysis within a unified framework.
+
+The remainder of this paper is organized as follows: Section 2 reviews related work in brain tumor segmentation and classification. Section 3 presents the detailed methodology of BrainTumNetV2, including architecture design, loss formulation, and training strategy. Section 4 describes experimental setup and results. Section 5 concludes the paper with discussion and future directions.
