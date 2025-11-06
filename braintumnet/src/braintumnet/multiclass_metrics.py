@@ -15,6 +15,7 @@ Evaluation regions:
 import torch
 import numpy as np
 from typing import Dict, Tuple
+from .metrics import compute_hausdorff_distance_95
 
 
 def multiclass_dice_coefficient(pred: torch.Tensor, target: torch.Tensor,
@@ -169,13 +170,14 @@ def compute_brats_regions(pred: torch.Tensor, target: torch.Tensor,
 class MulticlassMetricsAccumulator:
     """
     Accumulates intersection and union for each region across batches,
-    then computes global Dice/IoU at the end.
+    then computes global Dice/IoU/HD95 at the end.
 
     This is the CORRECT way to compute metrics - accumulate then divide,
     not average per-batch metrics.
     """
-    def __init__(self, num_classes: int = 3):
+    def __init__(self, num_classes: int = 3, compute_hd95: bool = True):
         self.num_classes = num_classes
+        self.compute_hd95 = compute_hd95
         self.reset()
 
     def reset(self):
@@ -188,6 +190,14 @@ class MulticlassMetricsAccumulator:
         self.union_ed = 0.0
         self.n_batches = 0
 
+        # HD95 accumulators
+        self.hd95_wt_sum = 0.0
+        self.hd95_wt_count = 0
+        self.hd95_tc_sum = 0.0
+        self.hd95_tc_count = 0
+        self.hd95_ed_sum = 0.0
+        self.hd95_ed_count = 0
+
     def update(self, pred: torch.Tensor, target: torch.Tensor):
         """
         Update accumulators with a new batch.
@@ -196,8 +206,6 @@ class MulticlassMetricsAccumulator:
             pred: (B, C, H, W) - predicted logits
             target: (B, 1, H, W) - integer class labels
         """
-        eps = 1e-6
-
         # Get HARD predictions using argmax (not soft probabilities!)
         # This is critical for correct Dice/IoU calculation
         pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
@@ -229,6 +237,56 @@ class MulticlassMetricsAccumulator:
         self.inter_wt += (pred_wt * target_wt).sum().item()
         self.union_wt += (pred_wt.sum() + target_wt.sum()).item()
 
+        # --- Compute HD95 if enabled ---
+        if self.compute_hd95:
+            # Convert to numpy for HD95 computation
+            pred_wt_np = pred_wt.cpu().numpy()
+            target_wt_np = target_wt.cpu().numpy()
+            pred_tc_np = pred_tc.cpu().numpy()
+            target_tc_np = target_tc.cpu().numpy()
+
+            batch_size = pred_wt_np.shape[0]
+
+            for i in range(batch_size):
+                # WT HD95
+                pred_count_wt = np.sum(pred_wt_np[i] > 0)
+                target_count_wt = np.sum(target_wt_np[i] > 0)
+                if pred_count_wt > 0 and target_count_wt > 0:
+                    try:
+                        hd95_val = compute_hausdorff_distance_95(pred_wt_np[i], target_wt_np[i])
+                        if not np.isinf(hd95_val) and not np.isnan(hd95_val):
+                            self.hd95_wt_sum += hd95_val
+                            self.hd95_wt_count += 1
+                    except Exception:
+                        pass
+
+                # TC HD95
+                pred_count_tc = np.sum(pred_tc_np[i] > 0)
+                target_count_tc = np.sum(target_tc_np[i] > 0)
+                if pred_count_tc > 0 and target_count_tc > 0:
+                    try:
+                        hd95_val = compute_hausdorff_distance_95(pred_tc_np[i], target_tc_np[i])
+                        if not np.isinf(hd95_val) and not np.isnan(hd95_val):
+                            self.hd95_tc_sum += hd95_val
+                            self.hd95_tc_count += 1
+                    except Exception:
+                        pass
+
+                # ED HD95
+                if self.num_classes >= 3:
+                    pred_ed_np = pred_ed.cpu().numpy()
+                    target_ed_np = target_ed.cpu().numpy()
+                    pred_count_ed = np.sum(pred_ed_np[i] > 0)
+                    target_count_ed = np.sum(target_ed_np[i] > 0)
+                    if pred_count_ed > 0 and target_count_ed > 0:
+                        try:
+                            hd95_val = compute_hausdorff_distance_95(pred_ed_np[i], target_ed_np[i])
+                            if not np.isinf(hd95_val) and not np.isnan(hd95_val):
+                                self.hd95_ed_sum += hd95_val
+                                self.hd95_ed_count += 1
+                        except Exception:
+                            pass
+
         self.n_batches += 1
 
     def get_metrics(self) -> Dict[str, float]:
@@ -236,7 +294,7 @@ class MulticlassMetricsAccumulator:
         Compute final global metrics from accumulated values.
 
         Returns:
-            Dictionary with all metrics
+            Dictionary with all metrics including HD95
         """
         eps = 1e-6
 
@@ -259,15 +317,35 @@ class MulticlassMetricsAccumulator:
             mean_dice = (dice_wt + dice_tc) / 2.0
             mean_iou = (iou_wt + iou_tc) / 2.0
 
+        # Compute HD95 for each region
+        hd95_wt = self.hd95_wt_sum / self.hd95_wt_count if self.hd95_wt_count > 0 else -1.0
+        hd95_tc = self.hd95_tc_sum / self.hd95_tc_count if self.hd95_tc_count > 0 else -1.0
+        hd95_ed = self.hd95_ed_sum / self.hd95_ed_count if self.hd95_ed_count > 0 else -1.0
+
+        # Compute mean HD95 (only from valid values)
+        valid_hd95_values = []
+        if hd95_wt >= 0:
+            valid_hd95_values.append(hd95_wt)
+        if hd95_tc >= 0:
+            valid_hd95_values.append(hd95_tc)
+        if hd95_ed >= 0 and self.num_classes >= 3:
+            valid_hd95_values.append(hd95_ed)
+
+        mean_hd95 = np.mean(valid_hd95_values) if len(valid_hd95_values) > 0 else -1.0
+
         return {
             'WT_dice': dice_wt,
             'WT_iou': iou_wt,
+            'WT_hd95': hd95_wt,
             'TC_dice': dice_tc,
             'TC_iou': iou_tc,
+            'TC_hd95': hd95_tc,
             'ED_dice': dice_ed,
             'ED_iou': iou_ed,
+            'ED_hd95': hd95_ed,
             'mean_dice': mean_dice,
             'mean_iou': mean_iou,
+            'mean_hd95': mean_hd95,
         }
 
     def get_current_metrics(self) -> Dict[str, float]:

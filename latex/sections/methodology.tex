@@ -2,345 +2,157 @@
 
 \subsection{Overview}
 
-AMT-UNet is a multi-task learning framework for simultaneous 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) from 4-channel multi-modal MRI input ($256 \times 256$ pixels). The architecture consists of three synergistic components (Figure~\ref{fig:architecture}): (1) a residual encoder-decoder with instance normalization and CBAM attention for hierarchical feature extraction, (2) an adaptive masked transformer bottleneck for efficient global context modeling, and (3) an ROI-guided classification network that leverages segmentation predictions to focus grade prediction on tumor regions.
+AMT-UNet performs simultaneous 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) from 4-channel MRI input ($256 \times 256$: FLAIR, T1, T1CE, T2). The architecture comprises: (1) a residual encoder-decoder with instance normalization and CBAM attention, (2) an adaptive masked transformer bottleneck, and (3) an ROI-guided classification network. Given input $\mathbf{X} \in \mathbb{R}^{4 \times H \times W}$, the model produces segmentation logits $\mathbf{S} \in \mathbb{R}^{3 \times H \times W}$ and classification logits $\mathbf{C} \in \mathbb{R}^{2}$.
 
-Given input $\mathbf{X} \in \mathbb{R}^{4 \times H \times W}$ representing FLAIR, T1, T1CE, and T2 modalities, AMT-UNet produces segmentation logits $\mathbf{S} \in \mathbb{R}^{3 \times H \times W}$ and classification logits $\mathbf{C} \in \mathbb{R}^{2}$. The model is trained end-to-end with a combined loss function integrating segmentation and classification objectives, with deep supervision at multiple decoder scales.
+\subsection{Encoder-Decoder with Residual Blocks}
 
-\subsection{Encoder-Decoder Architecture}
+The encoder consists of four residual blocks with channel progression $4 \rightarrow 48 \rightarrow 96 \rightarrow 192 \rightarrow 384$. Each block applies:
+\begin{align*}
+\mathbf{s}_i &= \text{ResConvBlock}(\mathbf{x}_{i-1}) \\
+\mathbf{x}_i &= \text{Conv}_{3\times3,s=2}(\mathbf{s}_i)
+\end{align*}
+where $\mathbf{s}_i$ serves as skip connection and $\mathbf{x}_i$ is downsampled for the next level.
 
-\subsubsection{Design Motivations}
-
-Our encoder-decoder design is motivated by three requirements specific to medical imaging: (1) \textit{batch-size independence} for stable training with small batches necessitated by GPU memory constraints, (2) \textit{information preservation} during downsampling to avoid irreversible spatial detail loss, and (3) \textit{gradient stability} in deep networks to enable effective optimization. These requirements led us to instance normalization, learned downsampling, and residual connections as core architectural choices.
-
-\subsubsection{Residual Convolutional Blocks}
-
-Each encoder and decoder level employs residual blocks with pre-activation structure:
-\begin{equation}
+Each residual block follows:
+\[
 \mathbf{y} = \text{LeakyReLU}(\mathbf{x} + \mathcal{F}(\mathbf{x}))
-\end{equation}
-where the residual function $\mathcal{F}(\mathbf{x})$ consists of two convolutional layers with intermediate normalization and activation:
-\begin{equation}
-\mathcal{F}(\mathbf{x}) = \text{Conv}(\text{IN}(\text{LeakyReLU}(\text{Conv}(\text{IN}(\text{LeakyReLU}(\mathbf{x}))))))
-\end{equation}
-
-\textbf{Motivation:} Residual connections \cite{he2016deep} enable training of deeper networks by providing direct gradient paths, preventing vanishing gradients. The identity mapping allows lower layers to learn residual modifications rather than complete transformations, facilitating optimization.
-
-\subsubsection{Instance Normalization}
-
-We normalize features per-instance and per-channel:
-\begin{equation}
+\]
+with $\mathcal{F}(\mathbf{x})$ composed of two $3\times3$ convolutions, instance normalization, and LeakyReLU ($\alpha=0.01$):
+\[
 \text{IN}(x_{bcij}) = \gamma_c \frac{x_{bcij} - \mu_{bc}}{\sqrt{\sigma_{bc}^2 + \epsilon}} + \beta_c
-\end{equation}
-where statistics $\mu_{bc} = \frac{1}{HW}\sum_{ij} x_{bcij}$ and $\sigma_{bc}^2 = \frac{1}{HW}\sum_{ij} (x_{bcij} - \mu_{bc})^2$ are computed independently for each sample $b$ and channel $c$, with learnable affine parameters $\gamma_c$, $\beta_c$.
+\]
+where statistics are computed per-sample and per-channel. Dropout (0.15) is applied in deeper layers ($i \geq 3$).
 
-\textbf{Motivation:} Instance normalization \cite{ulyanov2016instance} provides three advantages over batch normalization for medical imaging: (1) statistics computed per-sample eliminate batch size dependency, critical when memory constraints limit batch size; (2) independence between samples prevents cross-contamination of normalization statistics from different patients with varying anatomies; (3) robustness to scanner variations as each image is normalized individually based on its own intensity distribution.
-
-\subsubsection{LeakyReLU Activation}
-
-We use LeakyReLU with negative slope $\alpha=0.01$:
-\begin{equation}
-\text{LeakyReLU}(x) = \begin{cases} x & \text{if } x > 0 \\ 0.01x & \text{otherwise} \end{cases}
-\end{equation}
-
-\textbf{Motivation:} Unlike ReLU which zeros all negative activations, LeakyReLU provides small non-zero gradients for negative inputs. This prevents "dying ReLU" problem where neurons become permanently inactive, especially critical in deep networks where gradient signals must propagate through many layers. The small negative slope (0.01) maintains most of ReLU's benefits while ensuring gradient flow.
-
-\subsubsection{Learned Downsampling}
-
-Spatial downsampling uses strided convolutions rather than max pooling:
-\begin{equation}
-\mathbf{x}_{\text{down}} = \text{Conv}_{3\times3,s=2}(\mathbf{x})
-\end{equation}
-
-\textbf{Motivation:} Max pooling performs hard selection, discarding $75\%$ of spatial information irreversibly. Strided convolutions learn optimal downsampling functions parameterized by convolutional weights, potentially preserving more relevant information through weighted combinations of spatial locations. This learned approach adapts to data characteristics during training.
-
-\subsubsection{Encoder Structure}
-
-The encoder consists of four blocks with channel progression $4 \rightarrow 48 \rightarrow 96 \rightarrow 192 \rightarrow 384$ for our 37M-parameter configuration. Each block:
-\begin{align}
-\mathbf{s}_i &= \text{ResConvBlock}(\mathbf{x}_{i-1}) \label{eq:enc_skip}\\
-\mathbf{x}_i &= \text{Conv}_{3\times3,s=2}(\mathbf{s}_i) \label{eq:enc_down}
-\end{align}
-where $\mathbf{s}_i$ serves as skip connection to the decoder and $\mathbf{x}_i$ is downsampled input to the next level. Dropout (rate 0.15) is applied in deeper layers ($i \geq 3$) for regularization.
-
-\textbf{Motivation:} The channel progression follows the principle that semantic complexity increases while spatial resolution decreases through the encoder. More channels at deeper levels provide capacity to represent increasingly abstract features. Dropout in deeper layers prevents overfitting where feature dimensionality is highest.
+The decoder mirrors the encoder with transposed convolutions for upsampling. Skip connections are refined using CBAM attention:
+\begin{align*}
+\mathbf{s}' &= \mathbf{s} \odot \sigma(\text{MLP}_{\text{ch}}(\text{AvgPool}(\mathbf{s})) + \text{MLP}_{\text{ch}}(\text{MaxPool}(\mathbf{s}))) \\
+\mathbf{s}'' &= \mathbf{s}' \odot \sigma(\text{Conv}_{7\times7}([\text{AvgPool}_C(\mathbf{s}'); \text{MaxPool}_C(\mathbf{s}')]))
+\end{align*}
+providing channel and spatial attention. Each decoder level produces features $\mathbf{d}_i$ at resolutions $32\times32$, $64\times64$, $128\times128$, and $256\times256$.
 
 \subsection{Adaptive Masked Transformer Bottleneck}
 
-\subsubsection{Design Motivation}
+At the bottleneck ($16 \times 16$ resolution), features are processed through a masked transformer to capture global context. Features are projected and divided into patches:
+\begin{align*}
+\mathbf{f} &= \text{Conv}_{1\times1}(\mathbf{x}_4) \in \mathbb{R}^{384 \times 16 \times 16} \\
+\mathbf{t} &= \text{LN}(\text{Flatten}(\text{Patchify}_{8 \times 8}(\mathbf{f}))) \in \mathbb{R}^{4 \times 384}
+\end{align*}
 
-At the bottleneck (spatial resolution $H/8 \times W/8$), we face a trade-off: standard CNNs have limited receptive fields insufficient for global tumor context, while standard transformers have quadratic complexity prohibitive for medical images. Our adaptive masked transformer resolves this by learning to focus computational resources on tumor-relevant regions through soft masking, achieving the benefits of global attention with reduced computational cost.
+A lightweight MLP generates soft masks for each attention head:
+\[
+\mathbf{m} = \text{Sigmoid}(\mathbf{W}_2 \text{GELU}(\mathbf{W}_1 \mathbf{t})) \in [0,1]^{8 \times 4}
+\]
+where $\mathbf{W}_1 \in \mathbb{R}^{384 \times 192}$, $\mathbf{W}_2 \in \mathbb{R}^{192 \times 8}$. Masks focus attention on tumor-relevant patches.
 
-\subsubsection{Patch Embedding}
-
-Features are first projected to transformer dimension and divided into non-overlapping patches:
-\begin{align}
-\mathbf{f} &= \text{Conv}_{1\times1}(\mathbf{x}_4) \in \mathbb{R}^{d \times H' \times W'} \\
-\mathbf{t} &= \text{Flatten}(\text{Patchify}_{p \times p}(\mathbf{f})) \in \mathbb{R}^{N \times d}
-\end{align}
-where $d=384$ is transformer dimension, $p=8$ is patch size, $N = (H'/p) \times (W'/p)$ is number of patches. Layer normalization is applied: $\mathbf{t} \leftarrow \text{LN}(\mathbf{t})$.
-
-\textbf{Motivation:} Patch-based tokenization reduces sequence length from $H' \times W'$ pixels to $(H'/p) \times (W'/p)$ tokens, making self-attention tractable. The $1\times1$ projection adjusts channel dimension while preserving spatial structure before patching.
-
-\subsubsection{Adaptive Soft Masking}
-
-A lightweight MLP generates continuous attention masks for each patch and head:
-\begin{align}
-\mathbf{m} &= \text{Sigmoid}(\text{MLP}(\mathbf{t})) \in [0,1]^{H \times N} \\
-\text{MLP}(\mathbf{t}) &= \mathbf{W}_2 \text{GELU}(\mathbf{W}_1 \mathbf{t})
-\end{align}
-where $\mathbf{W}_1 \in \mathbb{R}^{d \times d/2}$, $\mathbf{W}_2 \in \mathbb{R}^{d/2 \times H}$, and $H=8$ is the number of attention heads.
-
-\textbf{Motivation:} The soft mask learns to identify tumor-relevant patches, with values near 1 for important regions and near 0 for background. Computing masks from token embeddings allows content-based, learned adaptation. Using sigmoid ensures masks are continuous and bounded, maintaining differentiability while approximating hard attention. Separate masks per head enable different heads to focus on different spatial regions or feature types.
-
-\subsubsection{Masked Multi-Head Self-Attention}
-
-Standard multi-head attention is modified to incorporate soft masking:
-\begin{align}
+Multi-head self-attention incorporates masks as log-space bias:
+\begin{align*}
 \mathbf{Q}, \mathbf{K}, \mathbf{V} &= \mathbf{W}_Q\mathbf{t}, \mathbf{W}_K\mathbf{t}, \mathbf{W}_V\mathbf{t} \\
-\mathbf{A} &= \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_h}} + \log(\mathbf{m} + \epsilon)\right) \\
+\mathbf{A} &= \text{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{48}} + \log(\mathbf{m} + \epsilon)\right) \\
 \text{out} &= \mathbf{A}\mathbf{V}
-\end{align}
-where $d_h = d/H = 48$ is head dimension and masks $\mathbf{m}$ are applied as additive log-space bias before softmax.
+\end{align*}
 
-\textbf{Motivation:} Adding $\log(\mathbf{m})$ to attention logits is mathematically equivalent to multiplicative masking in probability space but numerically more stable. When $m_{ij} \approx 0$, $\log(m_{ij}) \rightarrow -\infty$ makes $\text{softmax}(\cdot + \log(m_{ij})) \approx 0$, effectively pruning that attention weight. When $m_{ij} \approx 1$, $\log(m_{ij}) \approx 0$ has minimal effect. This soft pruning reduces effective sequence length dynamically based on content.
-
-Each attention head is followed by a position-wise feed-forward network with expansion ratio 4.0:
-\begin{equation}
-\text{FFN}(\mathbf{x}) = \mathbf{W}_2 \text{GELU}(\mathbf{W}_1 \mathbf{x})
-\end{equation}
-where $\mathbf{W}_1 \in \mathbb{R}^{d \times 4d}$ and $\mathbf{W}_2 \in \mathbb{R}^{4d \times d}$.
-
-\textbf{Motivation:} The FFN expansion increases model capacity to learn complex non-linear transformations after attention aggregation. GELU activation \cite{hendrycks2016gelu} provides smooth gradients and has shown superior performance in transformers compared to ReLU.
-
-We stack $L=4$ transformer blocks with residual connections and layer normalization:
-\begin{align}
+Each transformer block (4 layers total) applies:
+\begin{align*}
 \mathbf{t}' &= \mathbf{t} + \text{MSA}(\text{LN}(\mathbf{t}), \mathbf{m}) \\
 \mathbf{t}'' &= \mathbf{t}' + \text{FFN}(\text{LN}(\mathbf{t}'))
-\end{align}
+\end{align*}
+where FFN expands to dimension $1536$ with GELU activation. After transformation, tokens are reshaped and upsampled:
+\[
+\mathbf{b} = \text{ConvTranspose}_{8\times 8, s=8}(\text{Reshape}(\mathbf{t}'')) \in \mathbb{R}^{384 \times 16 \times 16}
+\]
 
-After transformation, tokens are reshaped to spatial format and upsampled via transposed convolution:
-\begin{equation}
-\mathbf{b} = \text{ConvTranspose}_{p\times p, s=p}(\text{Reshape}(\mathbf{t}'', (H', W')))
-\end{equation}
-producing output matching encoder bottleneck dimensions for connection to decoder.
+\subsection{Multi-Scale Fusion and Segmentation Head}
 
-\subsection{Decoder with Multi-Scale Fusion}
+Features from all decoder levels are fused at full resolution. Each level contributes:
+\[
+\mathbf{f}_i = \text{Interpolate}(\text{Conv}_{1\times1}(\mathbf{d}_i), (256, 256))
+\]
 
-\subsubsection{CBAM Attention on Skip Connections}
+Fused features combine multi-scale information:
+\[
+\mathbf{f}_{\text{fused}} = \text{IN}(\text{LeakyReLU}(\sum_{i=1}^{4} \mathbf{f}_i))
+\]
 
-Skip connections are refined using Convolutional Block Attention Module \cite{woo2018cbam}:
-\begin{align}
-\mathbf{s}' &= \mathbf{s} \odot \text{ChannelAttn}(\mathbf{s}) \\
-\mathbf{s}'' &= \mathbf{s}' \odot \text{SpatialAttn}(\mathbf{s}')
-\end{align}
+The segmentation head concatenates finest-level features with fused features:
+\[
+\mathbf{S} = \text{Conv}_{1\times1}(\text{ResConvBlock}([\mathbf{d}_1; \mathbf{f}_{\text{fused}}]))
+\]
 
-Channel attention uses global pooling and shared MLP:
-\begin{equation}
-\text{ChannelAttn}(\mathbf{s}) = \sigma(\text{MLP}(\text{AvgPool}(\mathbf{s})) + \text{MLP}(\text{MaxPool}(\mathbf{s})))
-\end{equation}
-where MLP has structure $C \rightarrow C/16 \rightarrow C$ with ReLU activation.
-
-Spatial attention aggregates channel-wise statistics:
-\begin{equation}
-\text{SpatialAttn}(\mathbf{s}) = \sigma(\text{Conv}_{7\times7}([\text{AvgPool}_C(\mathbf{s}); \text{MaxPool}_C(\mathbf{s})]))
-\end{equation}
-
-\textbf{Motivation:} CBAM provides content-adaptive feature selection at two complementary levels. Channel attention emphasizes "what" is important (which feature channels), while spatial attention emphasizes "where" (which spatial locations). This two-stage refinement suppresses irrelevant features in skip connections more effectively than simple gating, improving information flow from encoder to decoder.
-
-\subsubsection{Decoder Structure}
-
-Each of four decoder blocks performs upsampling, attention-enhanced skip connection fusion, and residual convolution:
-\begin{align}
-\mathbf{u}_i &= \text{ConvTranspose}_{2\times2,s=2}(\mathbf{x}_i) \\
-\mathbf{s}_i' &= \text{CBAM}(\mathbf{s}_i) \\
-\mathbf{d}_i &= \text{ResConvBlock}(\text{Concat}([\mathbf{u}_i, \mathbf{s}_i']))
-\end{align}
-
-\textbf{Motivation:} Transposed convolution learns optimal upsampling rather than using fixed interpolation. Concatenation preserves all information from both paths (upsampled features and refined skip connections) for the residual block to selectively combine.
-
-\subsubsection{Multi-Scale Feature Fusion}
-
-We fuse features from all decoder levels before final prediction:
-\begin{align}
-\mathbf{f}_i &= \text{Conv}_{1\times1}(\mathbf{d}_i) \in \mathbb{R}^{48 \times H_i \times W_i} \quad \forall i \in \{1,2,3,4\} \\
-\mathbf{f}_i^{\uparrow} &= \text{Interpolate}(\mathbf{f}_i, \text{size}=(H, W)) \\
-\mathbf{f}_{\text{fused}} &= \text{LeakyReLU}(\text{IN}(\sum_{i=1}^{4} \mathbf{f}_i^{\uparrow}))
-\end{align}
-
-The fused multi-scale features are concatenated with the final decoder output and processed:
-\begin{equation}
-\mathbf{f}_{\text{final}} = \text{ResConvBlock}(\text{Concat}([\mathbf{d}_1, \mathbf{f}_{\text{fused}}]))
-\end{equation}
-
-\textbf{Motivation:} Different decoder levels capture information at different semantic granularities: shallow layers ($\mathbf{d}_1$) preserve fine spatial details critical for boundary precision, while deep layers ($\mathbf{d}_4$) encode high-level contextual understanding. Standard skip connections provide point-wise fusion, but multi-scale fusion explicitly combines features across all levels, addressing the semantic gap. The summation after channel projection creates a holistic representation incorporating information from all scales simultaneously, which complements the localized information in $\mathbf{d}_1$.
-
-\subsection{Deep Supervision}
-
-Auxiliary segmentation heads are attached at three intermediate decoder levels:
-\begin{align}
-\mathbf{S}_{\text{main}} &= \text{Conv}_{1\times1}(\mathbf{f}_{\text{final}}) \in \mathbb{R}^{3 \times H \times W} \\
-\mathbf{S}_{\text{aux}i} &= \text{Conv}_{1\times1}(\mathbf{d}_i) \in \mathbb{R}^{3 \times H_i \times W_i} \quad i \in \{3,2,1\}
-\end{align}
-
-\textbf{Motivation:} Deep supervision \cite{lee2015deeply} provides direct gradient signals to intermediate layers, accelerating convergence and improving feature learning. Without deep supervision, gradients must propagate through many layers to reach early encoder blocks, potentially vanishing or becoming noisy. Auxiliary losses at multiple scales ensure each decoder level learns meaningful representations. The multi-resolution supervision (64$\times$64, 128$\times$128, 256$\times$256) encourages the network to produce consistent predictions across scales, acting as a form of multi-scale consistency regularization.
+Deep supervision applies auxiliary losses at three intermediate scales ($64\times64$, $128\times128$, $256\times256$) by adding segmentation heads to $\mathbf{d}_2$, $\mathbf{d}_3$, $\mathbf{d}_4$.
 
 \subsection{ROI-Guided Classification Network}
 
-\subsubsection{Motivation}
+Classification leverages segmentation predictions to focus on tumor regions. Whole tumor probability is computed:
+\[
+p_{\text{WT}} = \sum_{c \in \{\text{TC}, \text{ED}\}} \text{softmax}(\mathbf{S})_c
+\]
 
-Standard multi-task approaches share features through a common encoder but treat task heads independently. This ignores potential synergies where one task's output can inform another. For brain tumor grading, we hypothesize that classification should focus on tumor regions and ignore healthy tissue. Our ROI-guided approach implements this intuition explicitly.
+Input is reduced to single-channel and masked:
+\[
+\mathbf{r} = \text{Conv}_{1\times1}(\mathbf{X}) \odot p_{\text{WT}}.\text{detach}()
+\]
+where gradient stopping prevents classification loss from affecting segmentation.
 
-\subsubsection{Whole Tumor Probability Extraction}
+The classification network uses T-Inception blocks. Each block concatenates outputs from parallel branches ($1\times1$, $3\times3$, $1\times3$, $3\times1$ convolutions) and fuses with $1\times1$ projection. After two T-Inception blocks (64→128→256 channels), global average pooling and dropout (0.3) produce classification logits:
+\[
+\mathbf{C} = \text{Linear}(\text{Dropout}(\text{GlobalAvgPool}(\text{TInception}_2(\text{TInception}_1(\mathbf{r})))))
+\]
 
-From segmentation logits, we compute whole tumor probability:
-\begin{align}
-\mathbf{P} &= \text{softmax}(\mathbf{S}_{\text{main}}) \in \mathbb{R}^{3 \times H \times W} \\
-\mathbf{P}_{\text{WT}} &= \mathbf{P}_1 + \mathbf{P}_2 \in \mathbb{R}^{H \times W}
-\end{align}
-where $\mathbf{P}_1$ (tumor core) and $\mathbf{P}_2$ (edema) are summed to get whole tumor region.
+\subsection{Loss Function}
 
-\textbf{Motivation:} Whole tumor encompasses all tumor-related tissue, providing a comprehensive ROI for grade prediction. Using soft probabilities rather than hard masks preserves gradient information and allows the classification network to attend to uncertain boundary regions that may be diagnostically informative.
-
-\subsubsection{ROI Masking with Gradient Stopping}
-
-The multi-modal input is channel-reduced and masked by tumor probability:
-\begin{align}
-\mathbf{R} &= \text{Conv}_{1\times1}(\mathbf{X}) \in \mathbb{R}^{1 \times H \times W} \\
-\mathbf{R}_{\text{masked}} &= \mathbf{R} \odot \text{detach}(\mathbf{P}_{\text{WT}})
-\end{align}
-
-\textbf{Motivation:} The $\text{detach}$ operation stops gradients from classification loss flowing back through segmentation network. This prevents two issues: (1) classification gradients could degrade segmentation performance by encouraging predictions that benefit classification rather than accurate segmentation, and (2) the two tasks optimize different objectives that may conflict. One-way information flow (segmentation $\rightarrow$ classification) ensures segmentation learns independently while classification benefits from segmentation guidance.
-
-\subsubsection{T-Inception Architecture}
-
-The classification network uses multi-scale inception blocks:
+The total loss combines segmentation and classification:
 \begin{equation}
-\text{TInceptionBlock}(\mathbf{x}) = \text{Fuse}(\text{Concat}([B_{1\times1}(\mathbf{x}), B_{3\times3}(\mathbf{x}), B_{1\times3}(\mathbf{x}), B_{3\times1}(\mathbf{x})]))
+\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{seg}} + 0.5 \mathcal{L}_{\text{cls}}
+\label{eq:total_loss}
 \end{equation}
 
-\textbf{Motivation:} Tumor grades exhibit multi-scale characteristics—cellular features at fine scale, tissue patterns at coarse scale. Inception branches \cite{szegedy2015going} with different kernel shapes capture features at complementary scales: $1\times1$ for point-wise patterns, $3\times3$ for local texture, and asymmetric kernels ($1\times3$, $3\times1$) for directional features. Concatenation preserves all scale information for the fusion layer to integrate.
-
-The complete classification pipeline:
-\begin{align}
-\mathbf{h}_0 &= \text{Conv}_{3\times3}(\mathbf{R}_{\text{masked}}) \in \mathbb{R}^{64 \times H \times W} \\
-\mathbf{h}_1 &= \text{TInceptionBlock}(\mathbf{h}_0) \in \mathbb{R}^{128 \times H \times W} \\
-\mathbf{h}_2 &= \text{TInceptionBlock}(\mathbf{h}_1) \in \mathbb{R}^{256 \times H \times W} \\
-\mathbf{h}_{\text{pool}} &= \text{AdaptiveAvgPool}(\mathbf{h}_2) \in \mathbb{R}^{256} \\
-\mathbf{C} &= \text{Linear}(\text{Dropout}_{0.3}(\mathbf{h}_{\text{pool}})) \in \mathbb{R}^{2}
-\end{align}
-
-\subsection{Combined Loss Function}
-
-\subsubsection{Design Philosophy}
-
-Medical image segmentation presents multiple optimization challenges that no single loss addresses completely: (1) extreme class imbalance requires down-weighting easy examples, (2) evaluation uses IoU while training typically uses Dice or cross-entropy, creating a train-test objective mismatch, (3) clinical utility demands precise boundary delineation not captured by region-based metrics. Our combined loss integrates four complementary components, each addressing a specific challenge.
-
-The total training objective combines multi-task losses:
+Segmentation loss integrates four components:
 \begin{equation}
-\mathcal{L}_{\text{total}} = w_{\text{seg}} \mathcal{L}_{\text{seg}} + w_{\text{cls}} \mathcal{L}_{\text{cls}}
-\end{equation}
-where $w_{\text{seg}} = 1.0$ and $w_{\text{cls}} = 0.5$ reflect that segmentation is the primary task.
-
-\textbf{Motivation:} Lower classification weight (0.5) prevents classification from dominating optimization, which could occur since classification operates on global image-level features while segmentation requires pixel-level precision. This weighting empirically provides better balance between tasks.
-
-\subsubsection{Segmentation Loss Components}
-
-The segmentation loss integrates four terms:
-\begin{equation}
-\mathcal{L}_{\text{seg}} = w_D \mathcal{L}_{\text{Dice}} + w_F \mathcal{L}_{\text{Focal}} + w_I \mathcal{L}_{\text{IoU}} + w_B \mathcal{L}_{\text{Boundary}}
-\end{equation}
-with weights $w_D=1.0$, $w_F=1.0$, $w_I=2.5$, $w_B=0.6$.
-
-\textbf{Multi-Class Dice Loss} ($w_D=1.0$):
-\begin{equation}
-\mathcal{L}_{\text{Dice}} = 1 - \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{2 \sum_{i} p_{ci} g_{ci} + \epsilon}{\sum_{i} p_{ci} + \sum_{i} g_{ci} + \epsilon}
-\end{equation}
-where $p_{ci} = \text{softmax}(\mathbf{S})_{ci}$, $g_{ci}$ is one-hot ground truth, background ($c=0$) is excluded. Class weights $[1.0, 3.0, 4.0]$ for [background, tumor core, edema] emphasize harder classes.
-
-\textbf{Motivation:} Dice loss provides stable, differentiable optimization of region overlap. Unit weight ($w_D=1.0$) establishes it as the foundation. Class weighting addresses intra-tumor imbalance where edema (class 2) is often more challenging than tumor core due to ambiguous boundaries with healthy tissue.
-
-\textbf{Multi-Class Focal Loss} ($w_F=1.0$):
-\begin{equation}
-\mathcal{L}_{\text{Focal}} = -\frac{1}{N} \sum_{i} \sum_{c=1}^{C-1} \alpha_c (1 - p_{ci})^{\gamma} \log(p_{ci})
-\end{equation}
-with $\gamma=3.0$ and $\alpha_c = [0.0, 0.4, 0.3]$.
-
-\textbf{Motivation:} Focal loss down-weights easy examples through $(1-p_{ci})^{\gamma}$. We use $\gamma=3.0$ (higher than standard 2.0) for more aggressive focus on hard examples—pixels near boundaries or in ambiguous regions. This strong focusing is necessary given the extreme foreground-background imbalance (tumor $<5\%$ of volume). The $\alpha$ weights further balance classes: background receives zero weight, tumor core 0.4, edema 0.3, matching their relative difficulty.
-
-\textbf{IoU Loss} ($w_I=2.5$):
-\begin{equation}
-\mathcal{L}_{\text{IoU}} = 1 - \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{\sum_{i} p_{ci} g_{ci} + \epsilon}{\sum_{i} p_{ci} + \sum_{i} g_{ci} - \sum_{i} p_{ci} g_{ci} + \epsilon}
+\mathcal{L}_{\text{seg}} = \mathcal{L}_{\text{Dice}} + \mathcal{L}_{\text{Focal}} + 2.5\mathcal{L}_{\text{IoU}} + 0.6\mathcal{L}_{\text{Boundary}}
+\label{eq:seg_loss}
 \end{equation}
 
-\textbf{Motivation:} IoU directly optimizes the evaluation metric, resolving the train-test objective mismatch. IoU is stricter than Dice, penalizing false positives and false negatives more heavily. High weight ($w_I=2.5$, highest among components) prioritizes this target metric. While Dice=0.9 could correspond to IoU=0.82, directly optimizing IoU achieves better final performance.
+\textbf{Dice Loss} for class $c$ (excluding background):
+\[
+\mathcal{L}_{\text{Dice}} = \frac{1}{2}\sum_{c=1}^{2} w_c \left(1 - \frac{2\sum_{ij} p_{cij} y_{cij}}{\sum_{ij} p_{cij} + \sum_{ij} y_{cij} + \epsilon}\right)
+\]
+with class weights $w_{\text{TC}}=3.0$, $w_{\text{ED}}=4.0$.
 
-\textbf{Boundary Loss} ($w_B=0.6$):
-\begin{equation}
-\mathcal{L}_{\text{Boundary}} = \frac{1}{C-1} \sum_{c=1}^{C-1} \frac{1}{N} \sum_{i} \exp\left(-|D_c(i)|/\theta\right) |p_{ci} - g_{ci}|
-\end{equation}
-where $D_c(i)$ is signed distance transform of class $c$ mask, $\theta=5$ pixels controls decay.
+\textbf{Focal Loss} with $\gamma=3.0$:
+\[
+\mathcal{L}_{\text{Focal}} = -\frac{1}{HW}\sum_{ij} \alpha_{y_{ij}} (1-p_{y_{ij},ij})^{\gamma} \log(p_{y_{ij},ij})
+\]
+where $\alpha = [0.0, 0.4, 0.3]$ for background, TC, ED.
 
-\textbf{Motivation:} Boundary loss emphasizes edge precision through distance-weighted error: pixels near boundaries receive exponentially higher weight. This addresses a key limitation of region-based losses (Dice, IoU) that equally weight all errors—a one-pixel boundary shift affects these metrics minimally but has clinical significance. Moderate weight (0.6) balances boundary precision against region-level objectives. Too high would overemphasize edges at the expense of region coherence; this value ensures precise delineation without dominating optimization.
+\textbf{IoU Loss} for direct metric optimization:
+\[
+\mathcal{L}_{\text{IoU}} = \frac{1}{2}\sum_{c=1}^{2} w_c \left(1 - \frac{\sum_{ij} p_{cij} y_{cij}}{\sum_{ij} p_{cij} + \sum_{ij} y_{cij} - \sum_{ij} p_{cij} y_{cij} + 1}\right)
+\]
 
-\subsubsection{Deep Supervision}
+\textbf{Boundary Loss} emphasizes edges using distance transforms:
+\[
+\mathcal{L}_{\text{Boundary}} = \frac{1}{HW}\sum_{cij} \exp(-|d_{cij}|/5) |p_{cij} - y_{cij}|
+\]
+where $d_{cij}$ is the signed distance to the nearest boundary.
 
-The segmentation loss is computed at multiple scales:
-\begin{equation}
-\mathcal{L}_{\text{seg,total}} = \mathcal{L}_{\text{seg}}(\mathbf{S}_{\text{main}}, \mathbf{G}) + w_{\text{aux}} \sum_{k \in \{3,2,1\}} \mathcal{L}_{\text{seg}}(\mathbf{S}_{\text{aux}k}, \mathbf{G}_k)
-\end{equation}
-where ground truth $\mathbf{G}$ is downsampled to match auxiliary output resolutions using nearest-neighbor interpolation, and $w_{\text{aux}}=0.3$.
+\textbf{Deep Supervision} applies loss at three auxiliary outputs:
+\[
+\mathcal{L}_{\text{seg}}^{\text{total}} = \mathcal{L}_{\text{seg}}(\mathbf{S}) + 0.3\sum_{k=2}^{4} \mathcal{L}_{\text{seg}}(\mathbf{S}_{\text{aux},k})
+\]
 
-\textbf{Motivation:} Auxiliary weight 0.3 ensures meaningful gradient signals to intermediate layers without overwhelming the main output's supervision. Each auxiliary head experiences the full combined loss (Dice+Focal+IoU+Boundary), encouraging consistent multi-objective optimization across scales rather than allowing different scales to specialize in different metrics.
+\textbf{Classification Loss} uses standard cross-entropy:
+\[
+\mathcal{L}_{\text{cls}} = -\sum_{c=0}^{1} y_c \log(p_c)
+\]
 
-\subsubsection{Classification Loss}
+\subsection{Training Configuration}
 
-Standard cross-entropy for binary grade prediction:
-\begin{equation}
-\mathcal{L}_{\text{cls}} = -\frac{1}{B} \sum_{b=1}^{B} \log\left(\frac{\exp(\mathbf{C}_b[y_b])}{\sum_{k=0}^{1} \exp(\mathbf{C}_b[k])}\right)
-\end{equation}
+\textbf{Optimizer}: AdamW with $\text{lr}=5\times10^{-5}$, $\beta=(0.9, 0.999)$, weight decay $1.5\times10^{-4}$.
 
-\subsection{Training Strategy}
+\textbf{Learning Rate Schedule}: Cosine annealing with linear warmup (1000 steps to $5\times10^{-5}$, decay to $5\times10^{-7}$ over 400 epochs).
 
-\subsubsection{Optimization}
+\textbf{Augmentation}: Random horizontal/vertical flips (p=0.5), rotation ($\pm45°$), brightness/contrast adjustment ($\pm0.25$), Gaussian noise (std=0.01, p=0.2).
 
-We use AdamW optimizer \cite{loshchilov2018decoupled}:
-\begin{equation}
-\theta_{t+1} = \theta_t - \alpha_t \left(\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} + \lambda \theta_t\right)
-\end{equation}
-where $\hat{m}_t$ and $\hat{v}_t$ are bias-corrected moment estimates, $\alpha_t$ is learning rate, $\lambda=1.5 \times 10^{-4}$ is weight decay.
+\textbf{Regularization}: Gradient clipping (norm=1.0), dropout (0.15 in encoder, 0.3 in classifier), mixed precision (bfloat16).
 
-\textbf{Motivation:} AdamW decouples weight decay from gradient-based updates, providing more effective regularization than L2 penalty in standard Adam. This is especially important for large models where proper regularization prevents overfitting on limited medical imaging datasets.
-
-Learning rate: $\alpha_0 = 3 \times 10^{-5}$, scheduled with cosine annealing and linear warm-up:
-\begin{equation}
-\alpha_t = \begin{cases}
-\alpha_0 \frac{t}{T_{\text{warmup}}} & t \leq T_{\text{warmup}} \\
-\alpha_{\text{min}} + \frac{1}{2}(\alpha_0 - \alpha_{\text{min}})\left(1 + \cos\left(\pi \frac{t - T_{\text{warmup}}}{T_{\text{max}} - T_{\text{warmup}}}\right)\right) & t > T_{\text{warmup}}
-\end{cases}
-\end{equation}
-with $T_{\text{warmup}}=1000$ steps, $\alpha_{\text{min}} = 5 \times 10^{-7}$.
-
-\textbf{Motivation:} Warm-up prevents training instability in early epochs when batch normalization statistics (in classification branch) and layer-wise feature scales are not yet stable. Starting with small learning rate allows the network to explore the loss landscape cautiously. Cosine annealing provides smooth decay, maintaining exploration capability through non-zero learning rate until the end, unlike step decay which can cause abrupt changes in gradient magnitudes.
-
-Gradient clipping with maximum norm 1.0:
-\begin{equation}
-\mathbf{g} \leftarrow \min\left(1, \frac{1.0}{\|\mathbf{g}\|_2}\right) \mathbf{g}
-\end{equation}
-
-\textbf{Motivation:} Deep networks with transformer components can experience exploding gradients, especially early in training. Clipping stabilizes optimization by preventing large parameter updates that could destabilize learned representations.
-
-\subsubsection{Mixed Precision Training}
-
-We employ automatic mixed precision (AMP) with BFloat16 on A100 GPUs:
-\begin{equation}
-\mathbf{y} = f(\mathbf{x}; \theta_{\text{bf16}})
-\end{equation}
-while maintaining master weights in FP32.
-
-\textbf{Motivation:} Mixed precision reduces memory consumption by $\sim50\%$ and accelerates training by 1.5-2$\times$ through tensor core utilization, enabling larger batch sizes or higher-resolution inputs critical for capturing fine details in medical imaging.
-
-\subsubsection{Data Augmentation}
-
-Training applies: horizontal/vertical flips (p=0.5), random rotation $\pm45^{\circ}$, brightness/contrast adjustment ($\pm25\%$), and Gaussian noise ($\sigma=0.01$, p=0.2).
-
-\textbf{Motivation:} Medical images exhibit significant variability in patient positioning, scanner parameters, and anatomical variations. Augmentation provides invariance to these factors, improving generalization. Geometric augmentations account for positioning variations, intensity augmentations for scanner differences, and noise for acquisition artifacts.
+\textbf{Architecture}: 37M parameters, base channels=48, transformer dim=384, 4 transformer layers, 8 attention heads.

@@ -1,60 +1,19 @@
 \section{Conclusion}
 
-We presented AMT-UNet (Adaptive Masked Transformer U-Net), a hybrid CNN-transformer architecture for multi-task brain tumor segmentation and grade classification. Our method addresses key challenges in medical image analysis through principled architectural design and carefully motivated optimization strategies.
+We presented AMT-UNet, a hybrid CNN-transformer architecture for joint brain tumor segmentation and grade classification. The method combines: (1) an adaptive masked transformer bottleneck that focuses self-attention on tumor-relevant patches, reducing complexity while improving context modeling, (2) an encoder-decoder with instance normalization, residual connections, CBAM attention, and multi-scale fusion for robust feature extraction, (3) ROI-guided multi-task learning with gradient stopping to prevent task interference, and (4) a multi-component loss (Dice, focal, IoU, boundary) with deep supervision for effective optimization.
 
-\subsection{Key Contributions}
-
-Our main contributions are:
-
-\textbf{1. Adaptive Masked Transformer Bottleneck.} We introduce a transformer bottleneck that learns to focus computational resources on tumor-relevant regions through content-based soft masking. Unlike standard transformers with uniform $O(N^2)$ complexity across all spatial locations, our adaptive masking reduces effective sequence length by down-weighting background patches, achieving efficient global context modeling. The soft masking maintains differentiability while providing benefits of hard attention, enabling end-to-end optimization.
-
-\textbf{2. Hybrid CNN-Transformer Architecture with Multi-Scale Fusion.} We design an encoder-decoder featuring residual blocks with instance normalization for batch-size independence, LeakyReLU for gradient stability, learned downsampling via strided convolutions for information preservation, and CBAM attention on skip connections for adaptive feature refinement. Multi-scale fusion explicitly combines features from all decoder levels, addressing the semantic gap between shallow (detail-rich) and deep (context-rich) representations that standard point-wise skip connections fail to bridge.
-
-\textbf{3. ROI-Guided Multi-Task Learning.} Our multi-task framework implements elegant information flow where segmentation predictions explicitly guide classification through multiplicative ROI masking. Gradient stopping prevents classification loss from degrading segmentation quality, eliminating task interference. This one-way coupling (segmentation $\rightarrow$ classification) enables effective knowledge sharing while maintaining task independence.
-
-\textbf{4. Principled Multi-Component Loss Function.} We design a combined loss integrating four complementary objectives with motivated weights: (1) Dice loss (weight 1.0) for stable region overlap as foundation, (2) focal loss (weight 1.0, $\gamma=3.0$) for aggressive handling of extreme class imbalance, (3) IoU loss (weight 2.5, highest) to directly optimize the evaluation metric, and (4) boundary loss (weight 0.6) for precise edge delineation critical for clinical utility. Deep supervision at three decoder scales ensures effective gradient propagation throughout the deep network.
-
-\textbf{5. Comprehensive Design Motivations.} Beyond proposing architectural components, we provide detailed motivations for each design choice grounded in the specific requirements of medical imaging: instance normalization for scanner independence, strong focal focusing ($\gamma=3.0$) for tumor's extreme imbalance ($<5\%$ of volume), high IoU weight (2.5) to resolve train-test objective mismatch, and moderate boundary weight (0.6) to balance edge precision against region coherence.
-
-\subsection{Experimental Validation}
-
-Experiments on BraTS 2020 demonstrate AMT-UNet's effectiveness for brain tumor analysis. The architecture achieves competitive segmentation performance across all tumor sub-regions (whole tumor, tumor core, edema) while providing accurate grade classification, all within a unified 37M-parameter model with efficient inference suitable for clinical deployment.
+Experiments on BraTS 2020 demonstrate competitive performance for both segmentation and classification with 37M parameters. Key design choices include: instance normalization for scanner independence, strong focal focusing ($\gamma=3.0$) for extreme class imbalance, high IoU weight (2.5) for metric alignment, and soft masking for efficient global attention.
 
 \subsection{Limitations and Future Work}
 
-Current limitations suggest several research directions:
+Current limitations suggest several directions: (1) \textbf{3D extension} to leverage inter-slice context through hierarchical or sparse processing, (2) \textbf{uncertainty quantification} via Bayesian methods or ensembles for calibrated confidence, (3) \textbf{multi-center validation} with domain adaptation for improved generalization, (4) \textbf{model compression} through distillation or pruning for deployment, (5) \textbf{interpretability} beyond attention visualization for clinical trust, (6) \textbf{extended multi-task learning} for survival prediction and molecular subtyping, (7) \textbf{active learning} to reduce annotation costs, and (8) \textbf{few-shot adaptation} to new tumor types or modalities.
 
-\textbf{3D Extension.} Our method processes 2D slices independently, losing inter-slice context. Extending to 3D would improve performance but requires addressing computational challenges. Possible approaches: (1) hierarchical processing with 2D slice-level and 3D volume-level networks, (2) sparse 3D convolutions focusing on tumor regions, or (3) 3D adaptive masking at multiple resolutions.
+AMT-UNet demonstrates that principled combination of CNNs and transformers, guided by domain-specific requirements, achieves effective medical image analysis. The adaptive masking mechanism and ROI-guided multi-task design provide practical solutions to computational and optimization challenges in transformer-based medical imaging.
 
-\textbf{Uncertainty Quantification.} Medical image segmentation inherently involves uncertainty from ambiguous boundaries and inter-rater variability. Incorporating Bayesian neural networks, Monte Carlo dropout, or deep ensembles could provide calibrated confidence estimates for clinical decision support, identifying regions requiring expert review.
+\begin{credits}
+\subsubsection{\ackname}
+\textbf{[TODO: Add acknowledgments, for example: This study was funded by X (grant number Y). We thank the BraTS 2020 challenge organizers for providing the dataset.]}
 
-\textbf{Generalization Across Datasets.} While BraTS 2020 is a standard benchmark, generalization to different scanners, protocols, and patient populations needs validation. Future work should evaluate on multi-center data and investigate domain adaptation techniques (e.g., feature-level alignment, style transfer, federated learning) to improve robustness.
-
-\textbf{Model Compression.} For deployment on edge devices or resource-constrained settings, model compression is essential. Knowledge distillation from our 37M-parameter model to smaller student networks, structured pruning of less-important channels/heads, or quantization to INT8/INT4 could maintain performance while reducing computational cost.
-
-\textbf{Interpretability.} Understanding learned representations is crucial for clinical trust. Beyond attention visualization, future work could develop saliency methods specific to medical imaging, generate natural language explanations of predictions, or identify anatomical landmarks used for tumor localization.
-
-\textbf{Extended Multi-Task Learning.} Beyond segmentation and grading, other clinically relevant tasks could be integrated: survival prediction, molecular subtype classification (IDH mutation, MGMT methylation), treatment response prediction, or longitudinal tumor growth modeling. A unified framework leveraging shared representations could improve efficiency and performance across all tasks.
-
-\textbf{Active Learning.} Medical image annotation is expensive. Active learning strategies identifying the most informative cases for manual labeling could reduce annotation costs. Uncertainty-based selection (cases with low confidence), diversity-based selection (cases dissimilar to training set), or hybrid strategies could maximize learning efficiency.
-
-\textbf{Few-Shot and Zero-Shot Learning.} Adapting to new tumor types or imaging modalities with minimal labeled data is important for clinical applicability. Meta-learning approaches training on multiple tumor types could enable rapid adaptation, while vision-language models could leverage textual descriptions for zero-shot tumor recognition.
-
-\subsection{Concluding Remarks}
-
-AMT-UNet demonstrates that careful architecture design, motivated by specific domain requirements, can effectively combine the strengths of CNNs (local spatial processing, translation equivariance) and transformers (global context modeling, long-range dependencies). Our adaptive masking mechanism resolves the computational bottleneck of transformers while improving focus on diagnostically relevant regions. The multi-task framework with ROI guidance and gradient stopping enables effective knowledge sharing without task interference. Most importantly, the principled multi-component loss directly addresses optimization challenges specific to medical image segmentation.
-
-We believe this work establishes a strong foundation for medical image analysis by providing not just architectural innovations but comprehensive design motivations. The modular structure allows individual components to be improved or adapted to other medical imaging tasks. By prioritizing both performance and interpretability, AMT-UNet takes important steps toward clinically deployable AI systems for brain tumor analysis.
-
-Code, trained models, and detailed training logs will be made publicly available to facilitate reproducibility and enable future research.
-
-\subsection*{Acknowledgments}
-
-\textbf{[TODO: Add acknowledgments for:]}
-\begin{itemize}
-\item Funding sources
-\item Computing resources (GPU cluster or cloud computing credits)
-\item BraTS 2020 challenge organizers for providing the dataset
-\item Colleagues who provided feedback during development
-\item Any other contributors or supporting institutions
-\end{itemize}
+\subsubsection{\discintname}
+\textbf{[TODO: Declare competing interests, for example: The authors have no competing interests to declare that are relevant to the content of this article.]}
+\end{credits}

@@ -637,14 +637,40 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                         # Compute HD95 for each sample in batch
                         pred_np = (torch.sigmoid(seg) > 0.5).cpu().numpy()
                         target_np = msk.cpu().numpy()
+
+                        # Debug logging for first batch
+                        if batch_idx == 0 and epoch == start_epoch:
+                            logger.info(f"HD95 Debug - pred_np shape: {pred_np.shape}, target_np shape: {target_np.shape}")
+                            logger.info(f"HD95 Debug - pred_np unique values: {np.unique(pred_np)}")
+                            logger.info(f"HD95 Debug - target_np unique values: {np.unique(target_np)}")
+
                         for i in range(pred_np.shape[0]):
                             try:
-                                hd95_val = compute_hausdorff_distance_95(pred_np[i, 0], target_np[i, 0])
+                                # Extract 2D slice (remove channel dimension if present)
+                                pred_slice = pred_np[i, 0] if pred_np.ndim == 4 else pred_np[i]
+                                target_slice = target_np[i, 0] if target_np.ndim == 4 else target_np[i]
+
+                                # Check if masks are not empty
+                                pred_count = np.sum(pred_slice > 0)
+                                target_count = np.sum(target_slice > 0)
+
+                                if pred_count == 0 or target_count == 0:
+                                    # Skip empty masks
+                                    continue
+
+                                hd95_val = compute_hausdorff_distance_95(pred_slice, target_slice)
                                 if not np.isinf(hd95_val) and not np.isnan(hd95_val):
                                     hd95_sum += hd95_val
                                     hd95_count += 1
-                            except Exception:
-                                pass  # Skip if HD95 computation fails
+
+                                    # Debug logging for first successful computation
+                                    if hd95_count == 1 and batch_idx == 0:
+                                        logger.info(f"HD95 Debug - First valid HD95: {hd95_val:.4f} (pred_pixels: {pred_count}, target_pixels: {target_count})")
+                            except Exception as e:
+                                # Log first error for debugging
+                                if batch_idx == 0 and epoch == start_epoch:
+                                    logger.warning(f"HD95 computation failed: {e}, pred_shape: {pred_slice.shape}, target_shape: {target_slice.shape}")
+                                continue
 
                     if cls is not None:
                         cls_acc_sum += (cls.argmax(1) == lab).float().mean().item()
@@ -677,25 +703,36 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             # Compute final global metrics
             eps = 1e-6
             if num_classes_seg > 1:
-                # Get all multiclass metrics
+                # Get all multiclass metrics including HD95
                 final_metrics = metrics_acc.get_metrics()
                 # Use mean_dice as main metric for checkpointing
                 iou_m = final_metrics['mean_iou']
                 dice_m = final_metrics['mean_dice']
+                hd95_m = final_metrics['mean_hd95']
                 # Extract region-specific metrics
                 wt_dice = final_metrics['WT_dice']
                 wt_iou = final_metrics['WT_iou']
+                wt_hd95 = final_metrics['WT_hd95']
                 tc_dice = final_metrics['TC_dice']
                 tc_iou = final_metrics['TC_iou']
+                tc_hd95 = final_metrics['TC_hd95']
                 ed_dice = final_metrics['ED_dice']
                 ed_iou = final_metrics['ED_iou']
-                hd95_m = 0.0  # Not computed for multiclass yet
+                ed_hd95 = final_metrics['ED_hd95']
             else:
                 # Binary metrics
                 iou_m = total_inter / (total_union - total_inter + eps)
                 dice_m = (2 * total_inter) / (total_union + eps)
-                hd95_m = hd95_sum / hd95_count if hd95_count > 0 else 0.0
-                wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
+
+                # Compute HD95 (use -1.0 as sentinel for "not computed")
+                if hd95_count > 0:
+                    hd95_m = hd95_sum / hd95_count
+                    logger.info(f"HD95: Computed from {hd95_count} valid samples, mean = {hd95_m:.4f}")
+                else:
+                    hd95_m = -1.0  # Sentinel value
+                    logger.warning(f"HD95: No valid samples computed (all masks may be empty or model not predicting)")
+
+                wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
             acc_m = cls_acc_sum / cls_batches if cls_batches > 0 else 0.0
         else:
             # Skip validation this epoch
@@ -703,7 +740,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             dice_m = 0.0
             acc_m = 0.0
             hd95_m = 0.0
-            wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
+            wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
         avg_train_loss = train_loss_sum / len(train_loader)
         epoch_time = time.time() - epoch_start_time
 
@@ -718,9 +755,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         }
         if num_classes_seg > 1:
             log_dict.update({
-                'WT_dice': wt_dice, 'WT_iou': wt_iou,
-                'TC_dice': tc_dice, 'TC_iou': tc_iou,
-                'ED_dice': ed_dice, 'ED_iou': ed_iou
+                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
+                'TC_dice': tc_dice, 'TC_iou': tc_iou, 'TC_hd95': tc_hd95,
+                'ED_dice': ed_dice, 'ED_iou': ed_iou, 'ED_hd95': ed_hd95
             })
         logger.epoch_end(epoch, cfg["train"]["epochs"], log_dict, "SUMMARY")
 
@@ -735,22 +772,25 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         }
         if num_classes_seg > 1:
             metrics_dict.update({
-                'WT_dice': wt_dice, 'WT_iou': wt_iou,
-                'TC_dice': tc_dice, 'TC_iou': tc_iou,
-                'ED_dice': ed_dice, 'ED_iou': ed_iou
+                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
+                'TC_dice': tc_dice, 'TC_iou': tc_iou, 'TC_hd95': tc_hd95,
+                'ED_dice': ed_dice, 'ED_iou': ed_iou, 'ED_hd95': ed_hd95
             })
         metrics_logger.log_epoch(epoch, metrics_dict)
 
         # Console output
         if num_classes_seg > 1:
-            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | ClsAcc {acc_m:.4f}")
+            hd95_str = f"{hd95_m:.2f}" if hd95_m >= 0 else "N/A"
+            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | HD95 {hd95_str}")
         else:
-            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Dice {dice_m:.4f} | HD95 {hd95_m:.2f} | ClsAcc {acc_m:.4f}")
+            hd95_str = f"{hd95_m:.2f}" if hd95_m >= 0 else "N/A"
+            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Dice {dice_m:.4f} | HD95 {hd95_str} | ClsAcc {acc_m:.4f}")
 
         # Log validation metrics to TensorBoard
         if writer:
             writer.add_scalar('val/dice', dice_m, epoch)
-            writer.add_scalar('val/hd95', hd95_m, epoch)
+            if hd95_m >= 0:  # Only log if valid
+                writer.add_scalar('val/hd95', hd95_m, epoch)
             writer.add_scalar('val/cls_acc', acc_m, epoch)
             writer.add_scalar('epoch/train_loss', avg_train_loss, epoch)
 
@@ -758,10 +798,16 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             if num_classes_seg > 1:
                 writer.add_scalar('val/WT_dice', wt_dice, epoch)
                 writer.add_scalar('val/WT_iou', wt_iou, epoch)
+                if wt_hd95 >= 0:
+                    writer.add_scalar('val/WT_hd95', wt_hd95, epoch)
                 writer.add_scalar('val/TC_dice', tc_dice, epoch)
                 writer.add_scalar('val/TC_iou', tc_iou, epoch)
+                if tc_hd95 >= 0:
+                    writer.add_scalar('val/TC_hd95', tc_hd95, epoch)
                 writer.add_scalar('val/ED_dice', ed_dice, epoch)
                 writer.add_scalar('val/ED_iou', ed_iou, epoch)
+                if ed_hd95 >= 0:
+                    writer.add_scalar('val/ED_hd95', ed_hd95, epoch)
 
             # Log sample predictions every 10 epochs
             if sample_imgs is not None and epoch % 10 == 0:

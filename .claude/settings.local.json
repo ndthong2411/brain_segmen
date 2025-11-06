@@ -22,7 +22,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git restore:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(copy \"E:\\thong\\code\\brain_segmen\\latex\\template\\llncs.cls\" \"E:\\thong\\code\\brain_segmen\\latex\\llncs.cls\")",
+      "Bash(copy:*)",
+      "Bash(pdflatex:*)"
     ],
     "deny": [],
     "ask": []
