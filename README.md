@@ -1,6 +1,6 @@
 # Brain Tumor Segmentation Project
 
-This repository contains the **BrainTumNet** project - a deep learning framework for brain tumor segmentation and classification.
+This repository contains the **AMT-UNet** project - a hybrid CNN-transformer architecture for brain tumor segmentation and classification.
 
 ## Project Location
 

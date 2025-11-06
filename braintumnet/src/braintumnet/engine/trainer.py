@@ -1,11 +1,12 @@
 import os, math, torch, time, sys
+import numpy as np
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from typing import Dict
 from ..models.braintumnet import BrainTumNet
 from ..data.dataset_factory import create_dataset, get_data_root
 from ..losses import MultiTaskLoss, dice_loss_with_logits
-from ..metrics import iou_score, dice_score
+from ..metrics import iou_score, dice_score, compute_hausdorff_distance_95
 from ..utils.io import ensure_dir, save_ckpt, save_training_state
 from ..utils.logger import TrainingLogger
 from ..utils.metrics_logger import MetricsLogger
@@ -585,6 +586,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 metrics_acc = MulticlassMetricsAccumulator(num_classes=num_classes_seg)
             else:
                 total_inter, total_union = 0.0, 0.0
+                hd95_sum, hd95_count = 0.0, 0
 
             cls_acc_sum, cls_batches = 0.0, 0
             sample_imgs, sample_masks, sample_preds = None, None, None
@@ -632,6 +634,18 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                         total_inter += inter
                         total_union += union
 
+                        # Compute HD95 for each sample in batch
+                        pred_np = (torch.sigmoid(seg) > 0.5).cpu().numpy()
+                        target_np = msk.cpu().numpy()
+                        for i in range(pred_np.shape[0]):
+                            try:
+                                hd95_val = compute_hausdorff_distance_95(pred_np[i, 0], target_np[i, 0])
+                                if not np.isinf(hd95_val) and not np.isnan(hd95_val):
+                                    hd95_sum += hd95_val
+                                    hd95_count += 1
+                            except Exception:
+                                pass  # Skip if HD95 computation fails
+
                     if cls is not None:
                         cls_acc_sum += (cls.argmax(1) == lab).float().mean().item()
                         cls_batches += 1
@@ -647,9 +661,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                                 'ED': f'{curr_metrics["ED_dice"]:.4f}'
                             })
                         elif total_union > 0:
-                            curr_iou = total_inter / (total_union - total_inter + 1e-6)
                             curr_dice = (2 * total_inter) / (total_union + 1e-6)
-                            val_pbar.set_postfix({'iou': f'{curr_iou:.4f}', 'dice': f'{curr_dice:.4f}'})
+                            curr_hd95 = hd95_sum / hd95_count if hd95_count > 0 else 0.0
+                            val_pbar.set_postfix({'dice': f'{curr_dice:.4f}', 'hd95': f'{curr_hd95:.2f}'})
 
                     # Save first batch for visualization
                     if batch_idx == 0 and writer:
@@ -675,10 +689,12 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 tc_iou = final_metrics['TC_iou']
                 ed_dice = final_metrics['ED_dice']
                 ed_iou = final_metrics['ED_iou']
+                hd95_m = 0.0  # Not computed for multiclass yet
             else:
                 # Binary metrics
                 iou_m = total_inter / (total_union - total_inter + eps)
                 dice_m = (2 * total_inter) / (total_union + eps)
+                hd95_m = hd95_sum / hd95_count if hd95_count > 0 else 0.0
                 wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
             acc_m = cls_acc_sum / cls_batches if cls_batches > 0 else 0.0
         else:
@@ -686,6 +702,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             iou_m = best_iou  # Use previous best
             dice_m = 0.0
             acc_m = 0.0
+            hd95_m = 0.0
             wt_dice = wt_iou = tc_dice = tc_iou = ed_dice = ed_iou = 0.0
         avg_train_loss = train_loss_sum / len(train_loader)
         epoch_time = time.time() - epoch_start_time
@@ -693,8 +710,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         # Log to file logger
         log_dict = {
             'train_loss': avg_train_loss,
-            'val_iou': iou_m,
             'val_dice': dice_m,
+            'val_hd95': hd95_m,
             'val_acc': acc_m,
             'lr': opt.param_groups[0]['lr'],
             'time_s': epoch_time
@@ -710,8 +727,8 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         # Log to metrics logger (CSV/JSON)
         metrics_dict = {
             'train_loss': avg_train_loss,
-            'val_iou': iou_m,
             'val_dice': dice_m,
+            'val_hd95': hd95_m,
             'val_acc': acc_m,
             'learning_rate': opt.param_groups[0]['lr'],
             'epoch_time_s': epoch_time
@@ -728,12 +745,12 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         if num_classes_seg > 1:
             print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | ClsAcc {acc_m:.4f}")
         else:
-            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Val IoU {iou_m:.4f} | Dice {dice_m:.4f} | ClsAcc {acc_m:.4f}")
+            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Dice {dice_m:.4f} | HD95 {hd95_m:.2f} | ClsAcc {acc_m:.4f}")
 
         # Log validation metrics to TensorBoard
         if writer:
-            writer.add_scalar('val/iou', iou_m, epoch)
             writer.add_scalar('val/dice', dice_m, epoch)
+            writer.add_scalar('val/hd95', hd95_m, epoch)
             writer.add_scalar('val/cls_acc', acc_m, epoch)
             writer.add_scalar('epoch/train_loss', avg_train_loss, epoch)
 

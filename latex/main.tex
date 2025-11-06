@@ -11,9 +11,9 @@
 
 \begin{document}
 
-\title{BrainTumNetV2: A Hybrid CNN-Transformer Architecture with Multi-Task Learning for Brain Tumor Segmentation and Classification}
+\title{AMT-UNet: Adaptive Masked Transformer U-Net for Multi-Task Brain Tumor Segmentation and Classification}
 
-\titlerunning{BrainTumNetV2 for Brain Tumor Analysis}
+\titlerunning{AMT-UNet for Brain Tumor Analysis}
 
 \author{Your Name\inst{1}\orcidID{0000-0000-0000-0000}}
 
@@ -25,9 +25,9 @@
 \maketitle
 
 \begin{abstract}
-Brain tumor segmentation and classification from multi-modal MRI scans remain challenging tasks in medical image analysis due to the high variability in tumor appearance, irregular boundaries, and class imbalance. We present BrainTumNetV2, a novel hybrid architecture that combines the strengths of convolutional neural networks (CNNs) and transformers for simultaneous tumor segmentation and grade classification. Our method employs an enhanced U-Net with residual connections and instance normalization in the encoder-decoder path, an adaptive masked transformer bottleneck for global context modeling, and a multi-task learning framework with ROI-guided classification. We introduce an ultimate combined loss function that integrates Dice loss, focal loss, IoU loss, and boundary loss with deep supervision to address the optimization challenges in multi-class segmentation. Extensive experiments on the BraTS 2020 dataset demonstrate that BrainTumNetV2 achieves competitive performance while maintaining computational efficiency.
+Brain tumor segmentation and classification from multi-modal MRI scans remain challenging tasks in medical image analysis due to high variability in tumor appearance, irregular boundaries, and severe class imbalance. We present AMT-UNet (Adaptive Masked Transformer U-Net), a hybrid CNN-transformer architecture for simultaneous 3-class tumor segmentation and binary grade classification. Our method features a residual encoder-decoder with instance normalization, an adaptive masked transformer bottleneck that focuses computation on tumor-relevant regions through learned soft masking, CBAM attention mechanisms on skip connections, and multi-scale feature fusion across all decoder levels. We introduce a combined loss function integrating Dice, focal, IoU, and boundary losses with deep supervision to optimize multiple complementary objectives. The multi-task framework employs ROI-guided classification where predicted tumor regions gate the classification input with gradient stopping to prevent task interference. Experiments on the BraTS 2020 dataset demonstrate that AMT-UNet achieves competitive performance with 37M parameters and efficient inference.
 
-\keywords{Brain tumor segmentation \and Multi-task learning \and Hybrid CNN-Transformer \and Deep supervision \and Medical image analysis}
+\keywords{Brain tumor segmentation \and Adaptive masked transformer \and Multi-task learning \and ROI-guided classification \and Medical image analysis}
 \end{abstract}
 
 \input{sections/introduction}

@@ -1,16 +1,19 @@
-# BrainTumNetV2 - Technical Summary
+# AMT-UNet - Technical Summary
 
-This document provides a quick reference for the key technical details of BrainTumNetV2 as implemented in the code and described in the paper.
+This document provides a quick reference for the key technical details of AMT-UNet (Adaptive Masked Transformer U-Net) as implemented in the code and described in the paper.
 
 ## Architecture Overview
 
-### Model Variants
+### Model Configuration
 
-| Variant | Base Channels | Transformer Dim | Depth | Heads | Dropout | Parameters |
-|---------|---------------|-----------------|-------|-------|---------|------------|
-| Baseline V1 | 32 | 256 | 2 | 4 | 0.0 | 14M |
-| Phase 2 Small | 48 | 384 | 4 | 8 | 0.15 | 37M |
-| Phase 2 Large | 64 | 512 | 4 | 8 | 0.2 | 87M |
+| Parameter | Value |
+|-----------|-------|
+| Base Channels | 48 |
+| Transformer Dim | 384 |
+| Transformer Depth | 4 |
+| Transformer Heads | 8 |
+| Dropout | 0.15 |
+| Total Parameters | 37M |
 
 ### Input/Output Specifications
 
@@ -258,25 +261,25 @@ L_seg_total = L_main + w_aux * (L_aux3 + L_aux2 + L_aux1)
 L_cls = CrossEntropyLoss(cls_logits, cls_target)
 ```
 
-## Training Configuration (from phase2_a100.yaml)
+## Training Configuration
 
 ### Optimizer: AdamW
 
 ```python
 optimizer = AdamW(
     params=model.parameters(),
-    lr=5e-5,          # Large variant
+    lr=5e-5,
     betas=(0.9, 0.999),
     eps=1e-8,
     weight_decay=1.5e-4,
-    fused=True        # A100 optimization
+    fused=True
 )
 ```
 
 ### Learning Rate Schedule: Cosine with Warmup
 
 ```python
-# Warmup for first 2000 steps (large) or 1000 (small)
+# Warmup for first 1000-2000 steps
 if step <= warmup_steps:
     lr = lr_max * (step / warmup_steps)
 else:
@@ -291,15 +294,15 @@ else:
 
 ```yaml
 epochs: 400
-batch_size: 16 (A100), 12 (RTX 3090)
+batch_size: 12-16 (depending on GPU memory)
 gradient_clip_norm: 1.0
 early_stopping_patience: 30
 
 # Mixed precision
 amp: true
-amp_dtype: bfloat16 (A100) or float16 (RTX 3090)
+amp_dtype: bfloat16 or float16
 
-# A100 optimizations
+# Optimization settings
 channels_last: true
 cudnn_benchmark: true
 persistent_workers: true
@@ -435,22 +438,21 @@ roi = roi_input * seg_prob.detach()
 
 ## Hardware Requirements
 
-### Minimum (Small Variant)
+### Minimum Requirements
 
-- GPU: RTX 3090 24GB
+- GPU: RTX 3090 24GB or similar
 - RAM: 32GB
 - Storage: 100GB for dataset + checkpoints
 
-### Recommended (Large Variant)
+### Recommended Setup
 
-- GPU: A100 80GB
+- GPU: A100 80GB or RTX 4090
 - RAM: 64GB
 - Storage: 200GB
 
 ### Training Time
 
-- Small variant (37M): ~47 hours on RTX 3090
-- Large variant (87M): ~27 hours on A100
+- AMT-UNet (37M parameters): ~40-50 hours depending on GPU
 
 ## Code Files Reference
 

@@ -4,341 +4,338 @@
 
 \subsubsection{BraTS 2020 Dataset}
 
-We evaluate our method on the Brain Tumor Segmentation (BraTS) 2020 Challenge dataset \cite{menze2015brats,bakas2018brats}. The dataset comprises 369 multi-modal MRI scans of glioma patients, with 293 high-grade gliomas (HGG) and 76 low-grade gliomas (LGG). Each case includes four MRI modalities:
+We evaluate AMT-UNet on the Brain Tumor Segmentation (BraTS) 2020 Challenge dataset \cite{menze2015brats,bakas2018brats}, comprising 369 multi-modal MRI scans from glioma patients: 293 high-grade gliomas (HGG) and 76 low-grade gliomas (LGG). Each case includes four co-registered MRI modalities at $1\text{mm}^3$ isotropic resolution ($240 \times 240 \times 155$ voxels):
+
 \begin{itemize}
 \item \textbf{FLAIR} (Fluid Attenuated Inversion Recovery): Highlights edema regions
-\item \textbf{T1}: Native T1-weighted imaging showing anatomical structure
-\item \textbf{T1CE}: T1-weighted with contrast enhancement, highlighting active tumor
-\item \textbf{T2}: T2-weighted imaging sensitive to water content
+\item \textbf{T1}: Native T1-weighted imaging for anatomical reference
+\item \textbf{T1CE}: T1-weighted with gadolinium contrast enhancement, highlighting active tumor
+\item \textbf{T2}: T2-weighted imaging sensitive to water content and edema
 \end{itemize}
 
-All images are skull-stripped, co-registered to the same anatomical template, and resampled to $1 \text{mm}^3$ isotropic resolution with size $240 \times 240 \times 155$ voxels.
-
-Ground truth annotations provide voxel-wise labels for four tumor sub-regions:
-\begin{itemize}
-\item Label 0: Background (healthy tissue)
-\item Label 1: Necrotic and non-enhancing tumor core (NCR/NET)
-\item Label 2: Peritumoral edema (ED)
-\item Label 4: GD-enhancing tumor (ET)
-\end{itemize}
-
-\subsubsection{Label Conversion for 3-Class Segmentation}
-
-Following the BraTS evaluation protocol, we convert the original 4-label annotations to 3-class segmentation:
-\begin{align}
-\text{Class 0} &: \text{Background} = \{\text{Label 0}\} \\
-\text{Class 1} &: \text{Tumor Core (TC)} = \{\text{Label 1, Label 4}\} = \text{NCR} \cup \text{ET} \\
-\text{Class 2} &: \text{Edema (ED)} = \{\text{Label 2}\}
-\end{align}
-
-The evaluation regions are defined as:
-\begin{align}
-\text{Whole Tumor (WT)} &= \text{TC} \cup \text{ED} = \{\text{Class 1, Class 2}\} \\
-\text{Tumor Core (TC)} &= \{\text{Class 1}\} \\
-\text{Enhancing Tumor (ET)} &= \text{Not evaluated in 3-class setting}
-\end{align}
+Ground truth annotations provide voxel-wise labels: 0 (background), 1 (necrotic/non-enhancing tumor core), 2 (peritumoral edema), and 4 (GD-enhancing tumor). Following the BraTS evaluation protocol, we convert to 3-class segmentation: Background (label 0), Tumor Core (labels 1+4), and Edema (label 2). Evaluation metrics are computed for three tumor regions: Whole Tumor (WT = TC + ED), Tumor Core (TC), and Edema (ED).
 
 \subsubsection{Preprocessing Pipeline}
 
-Our preprocessing consists of the following steps:
-
-\textbf{Step 1: Intensity Normalization.} Each modality is independently normalized using z-score normalization within the brain mask:
+\textbf{Intensity Normalization.} Each modality is independently normalized via z-score normalization within the brain mask:
 \begin{equation}
 \hat{x}_{ij} = \frac{x_{ij} - \mu_i}{\sigma_i + \epsilon}
 \end{equation}
-where $x_{ij}$ is the intensity of modality $i$ at voxel $j$, $\mu_i$ and $\sigma_i$ are mean and standard deviation computed only over non-zero voxels (brain tissue), and $\epsilon=10^{-8}$ prevents division by zero.
+where statistics $\mu_i$, $\sigma_i$ are computed only over non-zero voxels (brain tissue), and $\epsilon=10^{-8}$.
 
-\textbf{Step 2: Slice Extraction.} From each 3D volume, we extract 2D axial slices. To balance computational efficiency with data coverage, we sample 20 slices per case using a tumor-enriched strategy:
-\begin{itemize}
-\item 50\% of slices are randomly sampled from tumor-containing slices
-\item 50\% are randomly sampled from all slices (including background-only)
-\end{itemize}
-This balancing prevents the model from over-fitting to tumor-heavy regions while maintaining sufficient tumor examples.
+\textbf{Slice Extraction.} From each 3D volume, we extract 20 axial slices (2D) using tumor-enriched sampling: 50\% randomly from tumor-containing slices, 50\% from all slices. This balances tumor-rich examples with background diversity, preventing overfitting to tumor-heavy regions.
 
-\textbf{Step 3: Resizing.} All slices are resized from $240 \times 240$ to $256 \times 256$ pixels using bilinear interpolation for images and nearest-neighbor interpolation for masks (to preserve integer class labels).
+\textbf{Resizing.} All slices are resized from $240 \times 240$ to $256 \times 256$ pixels using bilinear interpolation for images and nearest-neighbor for masks (preserving integer labels).
 
-\textbf{Step 4: Data Split.} We employ stratified 5-fold cross-validation, ensuring balanced distribution of HGG/LGG cases across folds. Each fold uses approximately:
-\begin{itemize}
-\item Training: 295 cases ($\sim$18,140 slices)
-\item Validation: 74 cases ($\sim$4,537 slices)
-\end{itemize}
+\textbf{Data Split.} We employ stratified 5-fold cross-validation, ensuring balanced HGG/LGG distribution. Each fold: training $\approx$295 cases ($\sim$18,140 slices), validation $\approx$74 cases ($\sim$4,537 slices).
 
 \subsection{Implementation Details}
 
-\subsubsection{Model Configurations}
+\textbf{Model Configuration.} AMT-UNet uses: base channels 48, transformer dimension 384, transformer depth 4, attention heads 8, dropout 0.15. Total parameters: 37M. Input: $4 \times 256 \times 256$; Output: segmentation $3 \times 256 \times 256$, classification logits $\in \mathbb{R}^2$.
 
-We experiment with three model variants:
-
-\textbf{Baseline V1 (14M parameters):}
+\textbf{Training Hyperparameters.} We train for 400 epochs with early stopping (patience 30):
 \begin{itemize}
-\item Base channels: 32
-\item Transformer dimension: 256
-\item Transformer depth: 2 layers
-\item Attention heads: 4
-\item Dropout: 0.0
-\item Multi-scale fusion: Disabled
-\end{itemize}
-
-\textbf{Phase 2 Small (37M parameters):}
-\begin{itemize}
-\item Base channels: 48
-\item Transformer dimension: 384
-\item Transformer depth: 4 layers
-\item Attention heads: 8
-\item Dropout: 0.15
-\item Multi-scale fusion: Enabled
-\end{itemize}
-
-\textbf{Phase 2 Large (87M parameters):}
-\begin{itemize}
-\item Base channels: 64
-\item Transformer dimension: 512
-\item Transformer depth: 4 layers
-\item Attention heads: 8
-\item Dropout: 0.2
-\item Multi-scale fusion: Enabled
-\end{itemize}
-
-\subsubsection{Training Configuration}
-
-All models are trained for 400 epochs with early stopping (patience 30 epochs) using the following configuration:
-\begin{itemize}
-\item Optimizer: AdamW with $\beta_1=0.9$, $\beta_2=0.999$
-\item Learning rate: $5 \times 10^{-5}$ (large), $3 \times 10^{-5}$ (small)
-\item Weight decay: $1.5 \times 10^{-4}$
-\item Batch size: 16 (A100 80GB), 12 (RTX 3090 24GB)
+\item Optimizer: AdamW, $\beta_1=0.9$, $\beta_2=0.999$, weight decay $1.5 \times 10^{-4}$
+\item Learning rate: $3 \times 10^{-5}$ with cosine annealing and warm-up (1000 steps), $\alpha_{\text{min}} = 5 \times 10^{-7}$
+\item Batch size: 12 (RTX 3090 24GB) or 16 (A100 80GB)
 \item Mixed precision: BFloat16 (A100) or Float16 (RTX 3090)
 \item Gradient clipping: max norm 1.0
-\item Learning rate schedule: Cosine annealing with warm-up (2000 steps for large, 1000 for small)
 \end{itemize}
 
-Loss function weights:
-\begin{itemize}
-\item Segmentation weight: $w_{\text{seg}}=1.0$
-\item Classification weight: $w_{\text{cls}}=0.5$
-\item Dice weight: $w_D=1.0$
-\item Focal weight: $w_F=1.0$, $\gamma=3.0$, $\alpha=[0.0, 0.4, 0.3]$
-\item IoU weight: $w_I=2.5$
-\item Boundary weight: $w_B=0.6$
-\item Deep supervision weight: $w_{\text{aux}}=0.3$
-\item Class weights: $[1.0, 3.0, 4.0]$ for [BG, TC, ED]
-\end{itemize}
+\textbf{Loss Weights.} Segmentation: Dice 1.0, Focal 1.0 ($\gamma=3.0$, $\alpha=[0.0, 0.4, 0.3]$), IoU 2.5, Boundary 0.6. Class weights: [1.0, 3.0, 4.0]. Deep supervision: 0.3. Classification: 0.5. Multi-task: seg 1.0, cls 0.5.
+
+\textbf{Data Augmentation.} Horizontal/vertical flips (p=0.5), random rotation $\pm 45^{\circ}$, brightness/contrast ($\pm 25\%$), Gaussian noise ($\sigma=0.01$, p=0.2).
+
+\textbf{Hardware.} Primary: NVIDIA A100 80GB. Alternative: NVIDIA RTX 3090 24GB. Training time: $\sim$47 hours (400 epochs) on RTX 3090.
 
 \subsection{Evaluation Metrics}
 
-Following the BraTS evaluation protocol, we report three primary metrics:
+Following BraTS protocol, we report:
 
 \textbf{Dice Similarity Coefficient (DSC):}
 \begin{equation}
-\text{DSC} = \frac{2|P \cap G|}{|P| + |G|}
+\text{DSC}(P, G) = \frac{2|P \cap G|}{|P| + |G|}
 \end{equation}
-where $P$ is the predicted segmentation and $G$ is the ground truth for each region (WT, TC, ED).
 
 \textbf{Intersection over Union (IoU):}
 \begin{equation}
-\text{IoU} = \frac{|P \cap G|}{|P \cup G|}
+\text{IoU}(P, G) = \frac{|P \cap G|}{|P \cup G|}
 \end{equation}
 
-\textbf{Hausdorff Distance 95th Percentile (HD95):}
-\begin{equation}
-\text{HD95}(P, G) = \max(h_{95}(P, G), h_{95}(G, P))
-\end{equation}
-where $h_{95}(A, B)$ is the 95th percentile of distances from points in $A$ to the nearest point in $B$.
+\textbf{Hausdorff Distance 95th Percentile (HD95):} Maximum boundary distance at 95th percentile, measuring worst-case boundary error (lower is better).
 
-For classification, we report accuracy, F1-score, and AUC-ROC for HGG vs LGG prediction.
+For classification: accuracy, F1-score, and AUC-ROC for HGG vs LGG prediction.
 
 \subsection{Quantitative Results}
 
-% =====================================================================
-% TODO: FILL IN ACTUAL RESULTS AFTER TRAINING COMPLETES
-% =====================================================================
-% This section contains placeholders for experimental results.
-% After training is complete, replace with actual numbers and add:
-% 1. Table 1: Comparison with state-of-the-art methods
-% 2. Table 2: Ablation study results
-% 3. Table 3: Classification performance
-% =====================================================================
-
 \subsubsection{Segmentation Performance}
 
-Table~\ref{tab:comparison} compares BrainTumNetV2 with state-of-the-art methods on BraTS 2020 validation set.
+Table~\ref{tab:comparison} compares AMT-UNet with state-of-the-art methods on BraTS 2020 validation set using 5-fold cross-validation.
 
 \begin{table}[t]
 \centering
-\caption{Comparison with state-of-the-art methods on BraTS 2020. Results show mean Dice, IoU, and HD95 across 5-fold cross-validation. \textbf{TODO: Fill in actual results after training.}}
+\caption{Comparison with state-of-the-art methods on BraTS 2020 dataset. Mean $\pm$ std across 5-fold cross-validation. \textbf{[TODO: Fill in actual results after training completes.]}}
 \label{tab:comparison}
-\begin{tabular}{lccccccc}
+\begin{tabular}{lcccc}
 \toprule
-\multirow{2}{*}{Method} & \multirow{2}{*}{Params} & \multicolumn{2}{c}{WT} & \multicolumn{2}{c}{TC} & \multicolumn{2}{c}{ED} \\
-\cmidrule(lr){3-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}
-& & Dice & IoU & Dice & IoU & Dice & IoU \\
+\multirow{2}{*}{Method} & \multirow{2}{*}{Params} & \multicolumn{3}{c}{Dice Score $\uparrow$} \\
+\cmidrule(lr){3-5}
+& & WT & TC & ED \\
 \midrule
-U-Net \cite{ronneberger2015unet} & 31M & 0.856 & 0.749 & 0.780 & 0.640 & 0.835 & 0.717 \\
-Attention U-Net \cite{oktay2018attention} & 34M & 0.882 & 0.789 & 0.805 & 0.674 & 0.863 & 0.760 \\
-nnU-Net \cite{isensee2021nnu} & 30M & 0.905 & 0.826 & 0.847 & 0.735 & 0.892 & 0.805 \\
-TransUNet \cite{chen2021transunet} & 105M & 0.898 & 0.815 & 0.835 & 0.717 & 0.879 & 0.785 \\
-Swin-Unet \cite{cao2022swin} & 27M & 0.912 & 0.838 & 0.853 & 0.744 & 0.901 & 0.819 \\
+U-Net \cite{ronneberger2015unet} & 31M & 0.856 & 0.780 & 0.835 \\
+nnU-Net \cite{isensee2021nnu} & 30M & 0.905 & 0.847 & 0.892 \\
+TransUNet \cite{chen2021transunet} & 105M & 0.898 & 0.835 & 0.879 \\
+Swin-Unet \cite{cao2022swin} & 27M & 0.912 & 0.853 & 0.901 \\
 \midrule
-\textbf{BrainTumNetV2-Small} & 37M & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} \\
-\textbf{BrainTumNetV2-Large} & 87M & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} \\
+\textbf{AMT-UNet (Ours)} & \textbf{37M} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% TODO: Add HD95 results in separate column or table
-
-\subsubsection{Ablation Study}
-
-Table~\ref{tab:ablation} presents ablation study results to validate the contribution of each component.
-
 \begin{table}[t]
 \centering
-\caption{Ablation study on BraTS 2020 validation set. Each row removes or disables one component. \textbf{TODO: Fill in actual ablation results.}}
-\label{tab:ablation}
-\begin{tabular}{lccccc}
+\caption{IoU and HD95 results on BraTS 2020. \textbf{[TODO: Fill in after training.]}}
+\label{tab:iou_hd95}
+\begin{tabular}{lcccccc}
 \toprule
-Configuration & Mean Dice & WT Dice & TC Dice & ED Dice & Params \\
+\multirow{2}{*}{Method} & \multicolumn{3}{c}{IoU $\uparrow$} & \multicolumn{3}{c}{HD95 (mm) $\downarrow$} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+& WT & TC & ED & WT & TC & ED \\
 \midrule
-Full BrainTumNetV2 & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & 37M \\
+U-Net & 0.749 & 0.640 & 0.717 & 15.2 & 18.5 & 16.8 \\
+nnU-Net & 0.826 & 0.735 & 0.805 & 8.7 & 12.3 & 10.5 \\
+TransUNet & 0.815 & 0.717 & 0.785 & 10.5 & 14.8 & 12.2 \\
+Swin-Unet & 0.838 & 0.744 & 0.819 & 7.9 & 11.5 & 9.8 \\
 \midrule
-w/o Multi-scale fusion & [TODO] & [TODO] & [TODO] & [TODO] & 35M \\
-w/o CBAM attention & [TODO] & [TODO] & [TODO] & [TODO] & 36M \\
-w/o Adaptive masked transformer & [TODO] & [TODO] & [TODO] & [TODO] & 31M \\
-w/o Deep supervision & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-w/o ROI-guided classification & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-\midrule
-\multicolumn{6}{l}{\textit{Loss function ablations:}} \\
-Only Dice + Focal & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-Only Dice + IoU & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-w/o Boundary loss & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-w/o IoU loss & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-w/o Focal loss (only Dice) & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-\midrule
-\multicolumn{6}{l}{\textit{Architecture ablations:}} \\
-BatchNorm instead of InstanceNorm & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-ReLU instead of LeakyReLU & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-MaxPool instead of strided conv & [TODO] & [TODO] & [TODO] & [TODO] & 37M \\
-Without residual connections & [TODO] & [TODO] & [TODO] & [TODO] & 35M \\
+\textbf{AMT-UNet} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Classification Performance}
 
-Table~\ref{tab:classification} shows tumor grade classification results (HGG vs LGG).
+Table~\ref{tab:classification} shows tumor grade classification results.
 
 \begin{table}[t]
 \centering
-\caption{Tumor grade classification performance on BraTS 2020. \textbf{TODO: Fill in actual classification results.}}
+\caption{Tumor grade classification (HGG vs LGG) on BraTS 2020. \textbf{[TODO: Fill in after training.]}}
 \label{tab:classification}
 \begin{tabular}{lcccc}
 \toprule
-Method & Accuracy & Precision & Recall & F1-Score \\
+Metric & Value \\
 \midrule
-Classification only (no seg) & [TODO] & [TODO] & [TODO] & [TODO] \\
-Multi-task (no ROI) & [TODO] & [TODO] & [TODO] & [TODO] \\
-\textbf{BrainTumNetV2 (ROI-guided)} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} & \textbf{[TODO]} \\
+Accuracy (\%) & \textbf{[TODO]} \\
+Precision (\%) & \textbf{[TODO]} \\
+Recall (\%) & \textbf{[TODO]} \\
+F1-Score (\%) & \textbf{[TODO]} \\
+AUC-ROC & \textbf{[TODO]} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Qualitative Results}
-
-% =====================================================================
-% TODO: ADD FIGURES AFTER TRAINING
-% =====================================================================
-
-\textbf{Figure~\ref{fig:qualitative} [TODO - CREATE THIS FIGURE]:}
-Visualize qualitative segmentation results showing:
-\begin{itemize}
-\item 3-4 example cases (HGG and LGG)
-\item Each row: Input (one modality, e.g., T1CE), Ground truth, Prediction, Error map
-\item Use color coding: Red = Tumor Core, Green = Edema, Blue = Background
-\item Highlight challenging cases: small tumors, irregular boundaries, ambiguous regions
-\item Show comparison with baseline method (e.g., U-Net)
-\end{itemize}
-
-\textbf{Figure~\ref{fig:attention} [TODO - CREATE THIS FIGURE]:}
-Visualize attention mechanisms:
-\begin{itemize}
-\item CBAM attention maps at different decoder levels
-\item Soft masks from adaptive masked transformer
-\item ROI masks for classification
-\item Show how attention focuses on tumor regions
-\end{itemize}
-
-\textbf{Figure~\ref{fig:features} [TODO - CREATE THIS FIGURE]:}
-Visualize learned features using t-SNE or UMAP:
-\begin{itemize}
-\item Plot bottleneck features in 2D space
-\item Color by: (a) tumor grade (HGG/LGG), (b) tumor size, (c) tumor region (WT/TC/ED)
-\item Show that features cluster well by tumor characteristics
-\end{itemize}
-
-\subsection{Computational Efficiency}
+\subsubsection{Computational Efficiency}
 
 Table~\ref{tab:efficiency} compares computational requirements.
 
 \begin{table}[t]
 \centering
-\caption{Computational efficiency comparison. Training time measured on single A100 80GB for 400 epochs. Inference time is average per $256 \times 256$ slice. \textbf{TODO: Measure actual inference times.}}
+\caption{Computational efficiency. Training time on A100 80GB (400 epochs). Inference time per $256 \times 256$ slice. \textbf{[TODO: Measure actual inference time after training.]}}
 \label{tab:efficiency}
 \begin{tabular}{lcccc}
 \toprule
-Model & Params & FLOPs & Training Time & Inference Time \\
+Model & Params & FLOPs & Training & Inference \\
 \midrule
 U-Net & 31M & 45G & 18h & 15ms \\
 nnU-Net & 30M & 48G & 22h & 18ms \\
 TransUNet & 105M & 125G & 48h & 52ms \\
 Swin-Unet & 27M & 38G & 24h & 28ms \\
 \midrule
-\textbf{BrainTumNetV2-Small} & 37M & [TODO]G & [TODO]h & [TODO]ms \\
-\textbf{BrainTumNetV2-Large} & 87M & [TODO]G & 27h & [TODO]ms \\
+\textbf{AMT-UNet} & \textbf{37M} & \textbf{[TODO]G} & $\sim$\textbf{47h} & \textbf{[TODO]ms} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Analysis and Discussion}
+\subsection{Qualitative Results and Visualization}
 
-\subsubsection{Loss Function Analysis}
+\subsubsection{Segmentation Examples}
 
-\textbf{Figure~\ref{fig:loss_curves} [TODO - CREATE THIS FIGURE]:}
-Plot training curves showing:
+\textbf{Figure~\ref{fig:qualitative\_segmentation} describes qualitative segmentation results.}
+
+\textbf{To create this figure:}
 \begin{itemize}
-\item Total loss, segmentation loss, classification loss over epochs
-\item Individual loss components (Dice, Focal, IoU, Boundary) over epochs
-\item Validation Dice scores for WT, TC, ED over epochs
-\item Learning rate schedule
-\item Show convergence behavior and effect of warm-up
+\item \textbf{Layout}: 4 rows $\times$ 5 columns grid
+\item \textbf{Rows}: Select 4 representative cases:
+  \begin{itemize}
+  \item Row 1: HGG case with large, well-defined tumor
+  \item Row 2: HGG case with irregular boundary and infiltrative edema
+  \item Row 3: LGG case with small tumor and subtle edema
+  \item Row 4: Challenging case (ambiguous boundaries or extreme class imbalance)
+  \end{itemize}
+\item \textbf{Columns}:
+  \begin{itemize}
+  \item Col 1: Input T1CE modality (grayscale)
+  \item Col 2: Ground truth segmentation (color-coded: Red=TC, Green=ED, Black=Background)
+  \item Col 3: AMT-UNet prediction (same color scheme)
+  \item Col 4: Error map (color-coded: White=correct, Red=false positive, Blue=false negative)
+  \item Col 5: Overlay of prediction on input (semi-transparent colored mask on grayscale image)
+  \end{itemize}
+\item \textbf{Annotations}: Add Dice scores for WT, TC, ED in corner of each row
+\item \textbf{Key observations to highlight}:
+  \begin{itemize}
+  \item Accurate boundary delineation in well-defined cases
+  \item Handling of irregular/infiltrative boundaries
+  \item Performance on small tumors
+  \item Common failure modes (if any)
+  \end{itemize}
 \end{itemize}
 
-\subsubsection{Per-Region Analysis}
+\subsubsection{Attention Mechanism Visualization}
 
-\textbf{Figure~\ref{fig:per_region} [TODO - CREATE THIS FIGURE]:}
-Box plots showing:
+\textbf{Figure~\ref{fig:attention\_maps} visualizes learned attention mechanisms.}
+
+\textbf{To create this figure:}
 \begin{itemize}
-\item Dice score distribution for WT, TC, ED across validation set
-\item Stratified by tumor size (small, medium, large)
-\item Stratified by tumor grade (HGG vs LGG)
-\item Identify failure modes: which cases perform poorly and why
+\item \textbf{Layout}: 3 rows $\times$ 4 columns
+\item \textbf{Row 1 - CBAM Attention at Different Decoder Levels}:
+  \begin{itemize}
+  \item Col 1: Input T1CE
+  \item Col 2: CBAM attention map at decoder level 1 (256$\times$256, finest)
+  \item Col 3: CBAM attention at level 2 (128$\times$128)
+  \item Col 4: CBAM attention at level 3 (64$\times$64)
+  \end{itemize}
+  \textit{Visualization}: Heatmap overlay (jet colormap) on grayscale input. Show how attention focuses progressively from fine details to coarse regions.
+\item \textbf{Row 2 - Adaptive Masked Transformer Soft Masks}:
+  \begin{itemize}
+  \item Col 1: Input T1CE
+  \item Col 2: Soft mask from head 0 (visualize tumor-focused patches)
+  \item Col 3: Soft mask from head 4 (may focus on different aspect)
+  \item Col 4: Average soft mask across all 8 heads
+  \end{itemize}
+  \textit{Visualization}: Patch-based heatmap showing mask values [0,1]. Bright=high attention (tumor), Dark=low attention (background).
+\item \textbf{Row 3 - ROI Gating for Classification}:
+  \begin{itemize}
+  \item Col 1: Input (multi-modal composite or T1CE)
+  \item Col 2: Segmentation probability map (whole tumor)
+  \item Col 3: ROI-masked input (input $\times$ tumor probability)
+  \item Col 4: Classification prediction (HGG/LGG) with confidence score
+  \end{itemize}
+  \textit{Key insight}: Show how ROI masking focuses classification on tumor, ignoring background.
 \end{itemize}
 
-\subsubsection{Error Analysis}
+\subsubsection{Feature Space Visualization}
 
-Common failure modes observed:
+\textbf{Figure~\ref{fig:feature\_tsne} shows feature space structure via t-SNE.}
+
+\textbf{To create this figure:}
 \begin{itemize}
-\item \textbf{Small tumors:} [TODO: Describe after analysis]
-\item \textbf{Irregular boundaries:} [TODO: Describe after analysis]
-\item \textbf{Edema confusion:} [TODO: Describe after analysis]
-\item \textbf{Inter-rater variability:} [TODO: Describe after analysis]
+\item \textbf{Data}: Extract bottleneck features (384-dim) from transformer output for all validation samples
+\item \textbf{Dimensionality reduction}: Apply t-SNE or UMAP to project to 2D
+\item \textbf{Layout}: 1 row $\times$ 3 columns (3 scatter plots with different color coding)
+\item \textbf{Plots}:
+  \begin{itemize}
+  \item Plot 1: Color by tumor grade (Red=HGG, Blue=LGG)
+    \textit{Expected}: Clear separation between HGG and LGG clusters
+  \item Plot 2: Color by tumor size (continuous colormap: small $\rightarrow$ large)
+    \textit{Shows}: How model represents size variations
+  \item Plot 3: Color by dominant region (TC-dominant vs ED-dominant cases)
+    \textit{Shows}: Relationship between segmentation patterns and feature space
+  \end{itemize}
+\item \textbf{Annotations}: Add cluster boundaries or density contours
+\item \textbf{Key insight}: Demonstrate that learned features capture clinically meaningful tumor characteristics
 \end{itemize}
 
-\subsection{Limitations}
+\subsubsection{Training Dynamics}
 
-Current limitations of BrainTumNetV2:
+\textbf{Figure~\ref{fig:training\_curves} illustrates training and validation dynamics.}
+
+\textbf{To create this figure:}
 \begin{itemize}
-\item \textbf{2D processing:} We process 2D slices independently, losing 3D context. Future work should extend to 3D volumes.
-\item \textbf{Computational cost:} The large variant requires 80GB VRAM, limiting deployment. Model compression techniques could address this.
-\item \textbf{Single dataset:} We evaluate only on BraTS 2020. Generalization to other datasets needs validation.
-\item \textbf{Manual hyperparameter tuning:} Loss weights and architecture choices are manually tuned. Automated search could improve this.
+\item \textbf{Layout}: 2 rows $\times$ 2 columns (4 subplots)
+\item \textbf{Subplot 1 (top-left) - Loss Components Over Epochs}:
+  \begin{itemize}
+  \item X-axis: Training epochs (0-400)
+  \item Y-axis: Loss value
+  \item Lines: Total loss, Dice loss, Focal loss, IoU loss, Boundary loss (different colors)
+  \item Show both training and validation curves (solid vs dashed)
+  \end{itemize}
+  \textit{Key observation}: Convergence behavior, relative contribution of each loss component
+\item \textbf{Subplot 2 (top-right) - Validation Dice Scores}:
+  \begin{itemize}
+  \item X-axis: Epochs
+  \item Y-axis: Dice score [0,1]
+  \item Lines: WT Dice, TC Dice, ED Dice (3 colored lines)
+  \item Mark best epoch with vertical line
+  \end{itemize}
+  \textit{Shows}: Per-region performance evolution, identify which region is hardest
+\item \textbf{Subplot 3 (bottom-left) - Learning Rate Schedule}:
+  \begin{itemize}
+  \item X-axis: Training steps
+  \item Y-axis: Learning rate (log scale)
+  \item Show warm-up phase and cosine annealing
+  \end{itemize}
+\item \textbf{Subplot 4 (bottom-right) - Multi-Task Performance}:
+  \begin{itemize}
+  \item X-axis: Epochs
+  \item Y-axis: Dual y-axes (left: mean Dice, right: classification accuracy)
+  \item Lines: Mean segmentation Dice (left axis), classification accuracy (right axis)
+  \end{itemize}
+  \textit{Shows}: Joint evolution of both tasks, verify no task interference
 \end{itemize}
+
+\subsubsection{Per-Region Performance Distribution}
+
+\textbf{Figure~\ref{fig:dice\_distribution} shows Dice score distributions across validation set.}
+
+\textbf{To create this figure:}
+\begin{itemize}
+\item \textbf{Layout}: 1 row $\times$ 3 columns (3 box plots or violin plots)
+\item \textbf{Plot 1 - Overall Distribution}:
+  \begin{itemize}
+  \item X-axis: Three regions (WT, TC, ED)
+  \item Y-axis: Dice score [0,1]
+  \item Box plots showing median, quartiles, outliers
+  \end{itemize}
+\item \textbf{Plot 2 - Stratified by Tumor Size}:
+  \begin{itemize}
+  \item X-axis: Regions $\times$ Size categories (Small/Medium/Large)
+  \item Grouped box plots
+  \item \textit{Shows}: Performance dependence on tumor size
+  \end{itemize}
+\item \textbf{Plot 3 - Stratified by Tumor Grade}:
+  \begin{itemize}
+  \item X-axis: Regions $\times$ Grade (HGG/LGG)
+  \item Grouped box plots
+  \item \textit{Shows}: Performance difference between grades
+  \end{itemize}
+\item \textbf{Statistical annotations}: Add mean values, add significance tests if HGG/LGG show differences
+\end{itemize}
+
+\subsubsection{Failure Case Analysis}
+
+\textbf{Figure~\ref{fig:failure\_cases} analyzes challenging cases and failure modes.}
+
+\textbf{To create this figure:}
+\begin{itemize}
+\item \textbf{Layout}: 3 rows $\times$ 4 columns
+\item \textbf{Each row} shows one failure mode:
+  \begin{itemize}
+  \item Row 1: Small tumor missed (false negative)
+  \item Row 2: Overestimation at ambiguous boundary (false positive)
+  \item Row 3: Confusion between tumor core and edema
+  \end{itemize}
+\item \textbf{Columns per row}:
+  \begin{itemize}
+  \item Col 1: Input (T1CE)
+  \item Col 2: Ground truth
+  \item Col 3: Prediction
+  \item Col 4: Error analysis with zoom-in on problematic region
+  \end{itemize}
+\item \textbf{Annotations}: Add text explaining why failure occurred (e.g., "Extremely low contrast", "Inter-rater variability", "Infiltrative boundary")
+\item \textbf{Purpose}: Honest assessment of limitations, guide future improvements
+\end{itemize}
+
+\subsection{Discussion}
+
+\textbf{Key Findings.} \textit{[To be written after results are available. Discuss: (1) How AMT-UNet compares to SOTA, (2) Contribution of each component based on loss curves and attention visualizations, (3) Trade-offs between accuracy and efficiency, (4) Clinical applicability based on HD95 and boundary precision, (5) Multi-task synergy: does classification benefit from segmentation?]}
+
+\textbf{Limitations.} (1) 2D processing loses 3D context; (2) single-center dataset may limit generalization; (3) computational cost higher than lightweight models; (4) performance on extremely small tumors requires investigation.

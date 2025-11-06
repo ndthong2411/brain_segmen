@@ -1,8 +1,8 @@
-# Quick Start Guide - BrainTumNetV2 Paper
+# Quick Start Guide - AMT-UNet Paper
 
 ## What's Been Created
 
-A complete research paper following Springer LNCS/LNAI format (12-15 pages) with:
+A complete research paper for AMT-UNet (Adaptive Masked Transformer U-Net) following Springer LNCS/LNAI format (12-15 pages) with:
 
 ### ✅ Complete Files
 
@@ -22,16 +22,17 @@ A complete research paper following Springer LNCS/LNAI format (12-15 pages) with
 - **Section 1 - Introduction**: Problem, challenges, contributions
 - **Section 2 - Related Work**: U-Net variants, transformers, multi-task learning, loss functions
 - **Section 3 - Methodology** ⭐ **MOST DETAILED SECTION**:
-  - SegUNetV2 architecture (encoder, transformer, decoder)
+  - AMT-UNet architecture (encoder, transformer, decoder)
   - Adaptive masked transformer with soft masking
   - ROI-guided classification network
-  - Ultimate combined loss (Dice + Focal + IoU + Boundary)
+  - Combined loss function (Dice + Focal + IoU + Boundary)
   - Deep supervision strategy
   - Training configuration (optimizer, LR schedule, augmentation)
 - **Section 4 - Experiments**:
   - BraTS 2020 dataset description
   - Preprocessing pipeline
   - Implementation details
+  - Detailed figure descriptions (6 figures)
   - **[TODO]** Results tables (need to fill after training)
   - **[TODO]** Figures (need to create)
 - **Section 5 - Conclusion**: Summary, contributions, future directions
@@ -50,41 +51,40 @@ wget https://www.springer.com/gp/computer-science/lncs/conference-proceedings-gu
 
 Search for `[TODO]` in [experiments.tex](sections/experiments.tex):
 
-- **Table 1**: Comparison with SOTA (Dice, IoU for WT, TC, ED)
-- **Table 2**: Ablation study results
-- **Table 3**: Classification performance
-- **Table 4**: Computational efficiency
+- **Table 1**: Comparison with SOTA methods (U-Net, nnU-Net, TransUNet, Swin-Unet)
+- **Table 2**: Classification performance
+- **Table 3**: Computational efficiency
 
 ### 3. Create Figures
 
 Need to create 6 figures:
 
 1. **Figure 1: Architecture diagram**
-   - Use draw.io, PowerPoint, or TikZ
-   - Show encoder → transformer → decoder → multi-task heads
+   - Show encoder → adaptive masked transformer → decoder → multi-task heads
+   - Highlight skip connections with CBAM and multi-scale fusion
 
-2. **Figure 2: Qualitative results**
-   - 3-4 example segmentations
-   - Layout: Input | GT | Prediction | Error
+2. **Figure 2: Qualitative segmentation results**
+   - Multiple example cases (easy, medium, hard)
+   - Layout: Input modalities | Ground truth | Prediction
    - Use Python/matplotlib to generate
 
-3. **Figure 3: Attention maps**
-   - Visualize CBAM attention at different levels
-   - Show soft masks from transformer
-   - Show ROI masks for classification
+3. **Figure 3: Attention visualization**
+   - CBAM attention at different decoder levels
+   - Transformer soft masks highlighting tumor regions
+   - ROI gating masks for classification
 
-4. **Figure 4: Feature visualization**
-   - t-SNE/UMAP of bottleneck features
-   - Color by tumor grade/size
+4. **Figure 4: Feature space visualization**
+   - t-SNE of transformer bottleneck features
+   - Color code by: tumor grade, size, region type
 
 5. **Figure 5: Training curves**
-   - Loss components over epochs
-   - Validation Dice over epochs
+   - Loss components (Dice, Focal, IoU, Boundary) over epochs
+   - Validation Dice scores for WT, TC, ED
    - Learning rate schedule
 
-6. **Figure 6: Per-region analysis**
-   - Box plots of Dice scores
-   - Stratified by tumor characteristics
+6. **Figure 6: Per-case analysis**
+   - Dice score distributions (box plots)
+   - Stratified by tumor size, grade, location
 
 Save figures in `latex/figures/` as PDF (vector) or high-res PNG.
 
@@ -133,30 +133,32 @@ latexmk -pdf main.tex
 
 ## 📊 Key Highlights of Methodology Section
 
-The methodology section is **extremely detailed** with exact specifications from code:
+The methodology section is **extremely detailed** with exact specifications from code and clear design motivations:
 
 ### Architecture Details
 - Exact channel dimensions at each layer
-- Residual block structure with pre-activation
-- Instance normalization justification
+- Residual blocks with instance normalization
+- Motivation for each design choice (e.g., why instance norm, why strided conv)
 - Learned downsampling via strided convolutions
 - CBAM attention mathematics
 - Multi-scale fusion formulation
 
-### Transformer Bottleneck
+### Adaptive Masked Transformer Bottleneck
 - Patch embedding process
-- Soft masking mechanism with formulas
+- Soft masking mechanism with complete formulas
+- Content-based attention weighting
 - Multi-head self-attention with masking
 - Feed-forward network structure
 - All dimensions and hyperparameters
 
-### Loss Functions
+### Loss Functions with Motivations
 - Complete mathematical formulations for all 4 loss components
-- Exact weights: Dice=1.0, Focal=1.0, IoU=2.5, Boundary=0.6
+- Exact weights with justifications: Dice=1.0, Focal=1.0, IoU=2.5, Boundary=0.6
 - Focal parameters: γ=3.0, α=[0.0, 0.4, 0.3]
 - Class weights: [1.0, 3.0, 4.0]
 - Deep supervision weight: 0.3
 - Multi-task weights: seg=1.0, cls=0.5
+- WHY each loss component and weight was chosen
 
 ### Training Strategy
 - AdamW with exact hyperparameters
@@ -165,7 +167,7 @@ The methodology section is **extremely detailed** with exact specifications from
 - Gradient clipping
 - Data augmentation specifications
 
-All formulas match the actual code implementation exactly.
+All formulas and motivations match the actual code implementation exactly.
 
 ## 📁 File Organization
 
@@ -209,26 +211,28 @@ latex/
 
 ## 💡 Tips
 
-1. **Methodology is already complete** - All technical details extracted from actual code
-2. **Only results need filling** - Tables have clear TODO markers
-3. **Figures are well-specified** - Each has detailed description of what to include
-4. **Bibliography is comprehensive** - All major related works included
-5. **Code-based accuracy** - Every formula matches implementation
+1. **Methodology is complete with motivations** - All technical details with WHY explanations
+2. **Single variant focus** - 37M parameter model (no ablation study needed)
+3. **Only results need filling** - Tables have clear TODO markers
+4. **Figures are well-specified** - 6 detailed figure descriptions provided
+5. **Bibliography is comprehensive** - All major related works included
+6. **Code-based accuracy** - Every formula matches implementation exactly
 
 ## 📞 Support
 
 If you need help:
 1. Check [README.md](README.md) for detailed compilation instructions
-2. Check [TECHNICAL_SUMMARY.md](TECHNICAL_SUMMARY.md) for formula reference
-3. All code files are documented in TECHNICAL_SUMMARY.md
+2. Check [TECHNICAL_SUMMARY.md](TECHNICAL_SUMMARY.md) for quick formula reference
+3. All formulas extracted from actual code implementation
 
 ## 🎯 Next Steps
 
-1. **Download llncs.cls** from Springer
-2. **Test compile** to ensure LaTeX works
-3. **Train model** to completion
-4. **Fill results** in experiments.tex
-5. **Create figures** using training outputs
-6. **Final compile and submit**
+1. **Download llncs.cls** from Springer website
+2. **Test compile** to ensure LaTeX works correctly
+3. **Complete model training** to obtain results
+4. **Fill TODO placeholders** in experiments.tex with actual numbers
+5. **Create 6 figures** as specified in detailed descriptions
+6. **Update author information** and acknowledgments
+7. **Final compile and proofread** before submission
 
-The paper is **95% complete** - only results and figures need to be added!
+The paper structure is **complete** - AMT-UNet is presented as a unified method with clear motivations. Only experimental results and figures need to be added after training!
