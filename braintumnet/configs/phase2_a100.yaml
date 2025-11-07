@@ -3,8 +3,8 @@
 # FIXES from original phase2_a100.yaml:
 # 1. Reduced batch_size: 48 → 16 (better for multi-class)
 # 2. Adjusted learning rate: 1.1e-4 → 5.0e-5 (more stable)
-# 3. Increased ED weight: 2.5 → 4.0 (ED is hardest class)
-# 4. Increased focal_alpha for ED: 0.15 → 0.3
+# 3. Increased ET weight: 4-class target keeps smallest region emphasized
+# 4. Rebalanced focal_alpha for the 4-class (BG/NCR/ED/ET) setup
 # 5. Added warmup_ratio for more stable start
 #
 # Expected Results:
@@ -46,12 +46,12 @@ train:
   iou_weight: 2.5
   boundary_weight: 0.6
 
-  # Focal loss - ED FIXED: 0.15 → 0.3
-  focal_alpha: [0.0, 0.4, 0.3]           # [bg=0.0, TC=0.4, ED=0.3↑] FIX ED
+  # Focal loss - 4-class BraTS (BG, NCR, ED, ET)
+  focal_alpha: [0.0, 0.3, 0.4, 0.3]      # Class-aware weighting with ET emphasis
   focal_gamma: 3.0
 
-  # Class weights - ED FIXED: 2.5 → 4.0
-  class_weights: [1.0, 3.0, 4.0]         # [bg, TC=3.0, ED=4.0↑] ED is hardest!
+  # Class weights - ET gets highest emphasis
+  class_weights: [1.0, 3.0, 4.0, 5.0]    # [BG, NCR, ED, ET]
 
   ignore_background: true
 
@@ -118,7 +118,7 @@ model:
 
   # Input/Output
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4
   num_classes_cls: 2
 
   # Architecture
@@ -159,16 +159,16 @@ augment:
 # ============================================================
 #
 # Original phase2_a100.yaml issues:
-# 1. batch_size=48 → Gradients too smooth, ED class ignored
+# 1. batch_size=48 → Gradients too smooth, small tumor regions ignored
 # 2. lr=1.1e-4 → Too high, unstable training
-# 3. focal_alpha ED=0.15 → Too low weight for hardest class
-# 4. class_weights ED=2.5 → Not enough emphasis on ED
+# 3. focal_alpha ET=0.15 → Too low weight for hardest class
+# 4. class_weights ET=2.5 → Not enough emphasis on ET
 #
 # Fixed version:
 # 1. batch_size=16 → Better gradient signal for all classes
 # 2. lr=5.0e-5 → More stable (scaled: 3e-5 × sqrt(16/8) = 4.2e-5 ≈ 5e-5)
-# 3. focal_alpha ED=0.3 → 2x weight for ED
-# 4. class_weights ED=4.0 → Strongest weight for hardest class
+# 3. focal_alpha ET=0.3 → Higher weight for rarest tumor core
+# 4. class_weights ET=5.0 → Strongest emphasis on smallest region
 #
 # Why batch=16 not 8?
 # - A100 has 80GB, can handle 16 easily
@@ -177,7 +177,7 @@ augment:
 #
 # Expected improvement:
 # - WT: 0.04 → 0.83-0.86 (+0.82!)
-# - ED: 0.009 → 0.82-0.85 (+0.81!)
+# - ET: 0.009 → 0.82-0.85 (+0.81!)
 # - TC: 0.81 → 0.80-0.83 (stable)
 #
 # Training time per epoch: ~2.5 hours (batch=48) → ~4 hours (batch=16)

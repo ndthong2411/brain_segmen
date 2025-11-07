@@ -17,7 +17,7 @@
 #
 # 4. OPTIMIZED LOSS WEIGHTS:
 #    - boundary_weight: 0.6 → 1.0 (fix IoU-Dice gap)
-#    - Rebalanced focal_alpha and class_weights
+#    - Rebalanced focal_alpha and class_weights for 4-class BraTS
 #
 # BASELINE: Dice 0.8699, IoU 0.7717 (10% gap)
 # EXPECTED: Dice 0.91-0.94, IoU 0.84-0.87 (5% gap) → SOTA!
@@ -58,12 +58,12 @@ train:
   iou_weight: 2.5
   boundary_weight: 1.0              # INCREASED from 0.6 → Fix IoU-Dice gap!
 
-  # Focal loss - REBALANCED for better TC/ED performance
-  focal_alpha: [0.0, 0.35, 0.35]    # [bg=0.0, TC=0.35, ED=0.35] (was [0.0, 0.4, 0.3])
+  # Focal loss - REBALANCED for better NCR/ED/ET performance
+  focal_alpha: [0.0, 0.35, 0.35, 0.30]    # [BG, NCR, ED, ET]
   focal_gamma: 3.0
 
-  # Class weights - ADJUSTED to prevent ED over-weighting
-  class_weights: [1.0, 2.5, 3.0]    # [bg, TC=2.5, ED=3.0] (was [1.0, 3.0, 4.0])
+  # Class weights - ADJUSTED to prevent ED/ET over-weighting
+  class_weights: [1.0, 2.5, 3.0, 4.0]    # [BG, NCR, ED, ET]
   ignore_background: true
 
   # Deep supervision with scheduling (Phase 1)
@@ -136,7 +136,7 @@ model:
 
   # Input/Output
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4
   num_classes_cls: 2
 
   # Architecture (same as phase2 large)
@@ -215,8 +215,8 @@ augment:
 #
 # 3. Loss Weights:
 #    - boundary_weight: 0.6 → 1.0 (67% increase!)
-#    - focal_alpha: [0.0, 0.4, 0.3] → [0.0, 0.35, 0.35]
-#    - class_weights: [1.0, 3.0, 4.0] → [1.0, 2.5, 3.0]
+#    - focal_alpha: [0.0, 0.4, 0.3] → [0.0, 0.35, 0.35, 0.30]
+#    - class_weights: [1.0, 3.0, 4.0] → [1.0, 2.5, 3.0, 4.0]
 #
 # 4. Augmentation:
 #    - Added 6 advanced medical augmentations:

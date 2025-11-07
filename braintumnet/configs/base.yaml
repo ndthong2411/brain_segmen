@@ -9,9 +9,9 @@
 # ============================================================
 data:
   backend: "lmdb"
-  raw_root: "E:/thong/code/brain_segmen/braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
-  proc_root: "E:/thong/code/brain_segmen/braintumnet/data/processed_multiclass_4class"  # 4-class BraTS
-  lmdb_root: "E:/thong/code/brain_segmen/braintumnet/data/lmdb_processed_multiclass_4class"  # 4-class BraTS
+  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "braintumnet/data/processed_multiclass_4class"  # 4-class BraTS
+  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_4class"  # 4-class BraTS
   modality: "multi"
   img_size: 256
   slices_per_case: 155

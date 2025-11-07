@@ -12,7 +12,7 @@
 model:
   model_type: "v2"
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4
   num_classes_cls: 2
 
   # SegUNetV2 specific (same as Phase 1)
@@ -40,8 +40,8 @@ train:
 
   # Phase 1 optimized weights
   boundary_weight: 1.0
-  focal_alpha: [0.0, 0.35, 0.35]
-  class_weights: [1.0, 2.5, 3.0]
+  focal_alpha: [0.0, 0.35, 0.35, 0.30]
+  class_weights: [1.0, 2.5, 3.0, 4.0]
 
   # Phase 1 deep supervision
   aux_weight_initial: 0.5

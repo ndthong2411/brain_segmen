@@ -14,7 +14,7 @@
 model:
   model_type: "v2"  # Use v2 (same as segunetv2)
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4
   num_classes_cls: 2
 
   # SegUNetV2 specific (Phase 2 Large - same as baseline)
@@ -39,8 +39,8 @@ train:
 
   # PHASE 1: OPTIMIZED LOSS WEIGHTS
   boundary_weight: 1.0              # INCREASED from 0.6 (fix IoU-Dice gap)
-  focal_alpha: [0.0, 0.35, 0.35]    # REBALANCED (was [0.0, 0.4, 0.3])
-  class_weights: [1.0, 2.5, 3.0]    # ADJUSTED (was [1.0, 3.0, 4.0])
+  focal_alpha: [0.0, 0.35, 0.35, 0.30]    # REBALANCED (was [0.0, 0.4, 0.3])
+  class_weights: [1.0, 2.5, 3.0, 4.0]    # ADJUSTED (was [1.0, 3.0, 4.0])
 
   # PHASE 1: DEEP SUPERVISION SCHEDULING
   aux_weight_initial: 0.5           # Start with strong deep supervision

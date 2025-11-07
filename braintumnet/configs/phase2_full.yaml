@@ -47,12 +47,12 @@ train:
   iou_weight: 2.0                        # Emphasize IoU
   boundary_weight: 0.5
 
-  # Focal loss - background ignored
-  focal_alpha: [0.0, 0.4, 0.1]           # [bg=0.0, TC, ED]
+  # Focal loss - 4-class BraTS (BG, NCR, ED, ET)
+  focal_alpha: [0.0, 0.3, 0.4, 0.3]      # [BG, NCR, ED, ET]
   focal_gamma: 3.0
 
-  # Class weights - TC emphasized
-  class_weights: [1.0, 3.0, 2.0]         # [bg(ignored), TC, ED]
+  # Class weights - ET emphasized
+  class_weights: [1.0, 3.0, 4.0, 5.0]    # [BG, NCR, ED, ET]
 
   ignore_background: true
 
@@ -101,7 +101,7 @@ model:
 
   # Input/Output
   in_channels: 4
-  num_classes_seg: 3                     # bg, TC, ED
+  num_classes_seg: 4                     # BG, NCR, ED, ET
   num_classes_cls: 2                     # HGG, LGG
 
   # Architecture - Phase 2 Small

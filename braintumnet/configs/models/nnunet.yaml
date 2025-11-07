@@ -4,7 +4,7 @@
 model:
   model_type: "nnunet"
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4
   num_classes_cls: 2
 
   # nnU-Net specific

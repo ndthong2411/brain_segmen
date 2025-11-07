@@ -189,3 +189,4 @@ cython_debug/
 .cursorindexingignore
 /braintumnet/checkpoints
 braintumnet/checkpoints/braintumnet_best_fold4.pth
+braintumnet/checkpoints/braintumnet_best_fold0.pth
