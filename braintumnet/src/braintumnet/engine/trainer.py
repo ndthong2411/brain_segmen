@@ -710,12 +710,15 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                 dice_m = final_metrics['mean_dice']
                 hd95_m = final_metrics['mean_hd95']
                 # Extract region-specific metrics
-                wt_dice = final_metrics['WT_dice']
-                wt_iou = final_metrics['WT_iou']
-                wt_hd95 = final_metrics['WT_hd95']
+                et_dice = final_metrics['ET_dice']  # NEW for 4-class
+                et_iou = final_metrics['ET_iou']
+                et_hd95 = final_metrics['ET_hd95']
                 tc_dice = final_metrics['TC_dice']
                 tc_iou = final_metrics['TC_iou']
                 tc_hd95 = final_metrics['TC_hd95']
+                wt_dice = final_metrics['WT_dice']
+                wt_iou = final_metrics['WT_iou']
+                wt_hd95 = final_metrics['WT_hd95']
                 ed_dice = final_metrics['ED_dice']
                 ed_iou = final_metrics['ED_iou']
                 ed_hd95 = final_metrics['ED_hd95']
@@ -732,7 +735,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     hd95_m = -1.0  # Sentinel value
                     logger.warning(f"HD95: No valid samples computed (all masks may be empty or model not predicting)")
 
-                wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
+                et_dice = et_iou = et_hd95 = wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
             acc_m = cls_acc_sum / cls_batches if cls_batches > 0 else 0.0
         else:
             # Skip validation this epoch
@@ -740,7 +743,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             dice_m = 0.0
             acc_m = 0.0
             hd95_m = 0.0
-            wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
+            et_dice = et_iou = et_hd95 = wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
         avg_train_loss = train_loss_sum / len(train_loader)
         epoch_time = time.time() - epoch_start_time
 
@@ -755,8 +758,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         }
         if num_classes_seg > 1:
             log_dict.update({
-                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
+                'ET_dice': et_dice, 'ET_iou': et_iou, 'ET_hd95': et_hd95,
                 'TC_dice': tc_dice, 'TC_iou': tc_iou, 'TC_hd95': tc_hd95,
+                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
                 'ED_dice': ed_dice, 'ED_iou': ed_iou, 'ED_hd95': ed_hd95
             })
         logger.epoch_end(epoch, cfg["train"]["epochs"], log_dict, "SUMMARY")
@@ -772,8 +776,9 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         }
         if num_classes_seg > 1:
             metrics_dict.update({
-                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
+                'ET_dice': et_dice, 'ET_iou': et_iou, 'ET_hd95': et_hd95,
                 'TC_dice': tc_dice, 'TC_iou': tc_iou, 'TC_hd95': tc_hd95,
+                'WT_dice': wt_dice, 'WT_iou': wt_iou, 'WT_hd95': wt_hd95,
                 'ED_dice': ed_dice, 'ED_iou': ed_iou, 'ED_hd95': ed_hd95
             })
         metrics_logger.log_epoch(epoch, metrics_dict)
@@ -781,7 +786,12 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
         # Console output
         if num_classes_seg > 1:
             hd95_str = f"{hd95_m:.2f}" if hd95_m >= 0 else "N/A"
-            print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | HD95 {hd95_str}")
+            # 4-class: show ET, TC, WT (standard BraTS) - ED optional
+            if num_classes_seg == 4:
+                print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Loss {avg_train_loss:.4f} | ET {et_dice:.4f} | TC {tc_dice:.4f} | WT {wt_dice:.4f} | Mean {dice_m:.4f} | HD95 {hd95_str}")
+            else:
+                # 3-class: show WT, TC, ED
+                print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Loss {avg_train_loss:.4f} | WT {wt_dice:.4f} | TC {tc_dice:.4f} | ED {ed_dice:.4f} | Mean {dice_m:.4f} | HD95 {hd95_str}")
         else:
             hd95_str = f"{hd95_m:.2f}" if hd95_m >= 0 else "N/A"
             print(f"[Fold {fold}] Epoch {epoch+1}/{cfg['train']['epochs']} | Train Loss {avg_train_loss:.4f} | Dice {dice_m:.4f} | HD95 {hd95_str} | ClsAcc {acc_m:.4f}")
@@ -796,14 +806,23 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
             # Log multiclass metrics if applicable
             if num_classes_seg > 1:
-                writer.add_scalar('val/WT_dice', wt_dice, epoch)
-                writer.add_scalar('val/WT_iou', wt_iou, epoch)
-                if wt_hd95 >= 0:
-                    writer.add_scalar('val/WT_hd95', wt_hd95, epoch)
+                # ET metrics (4-class only)
+                if num_classes_seg == 4 and et_dice > 0:
+                    writer.add_scalar('val/ET_dice', et_dice, epoch)
+                    writer.add_scalar('val/ET_iou', et_iou, epoch)
+                    if et_hd95 >= 0:
+                        writer.add_scalar('val/ET_hd95', et_hd95, epoch)
+                # TC metrics
                 writer.add_scalar('val/TC_dice', tc_dice, epoch)
                 writer.add_scalar('val/TC_iou', tc_iou, epoch)
                 if tc_hd95 >= 0:
                     writer.add_scalar('val/TC_hd95', tc_hd95, epoch)
+                # WT metrics
+                writer.add_scalar('val/WT_dice', wt_dice, epoch)
+                writer.add_scalar('val/WT_iou', wt_iou, epoch)
+                if wt_hd95 >= 0:
+                    writer.add_scalar('val/WT_hd95', wt_hd95, epoch)
+                # ED metrics
                 writer.add_scalar('val/ED_dice', ed_dice, epoch)
                 writer.add_scalar('val/ED_iou', ed_iou, epoch)
                 if ed_hd95 >= 0:

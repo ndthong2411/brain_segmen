@@ -1,15 +1,16 @@
 """
-Multi-class Segmentation Metrics for BraTS Tumor Regions
+Multi-class Segmentation Metrics for BraTS Tumor Regions (STANDARD 4-class)
 
-For 3-class segmentation:
+For 4-class segmentation:
 - Class 0: Background
-- Class 1: Tumor Core (TC)
-- Class 2: Edema (ED)
+- Class 1: NCR/NET (Necrotic/Non-enhancing)
+- Class 2: ED (Edema/Peritumoral)
+- Class 3: ET (Enhancing Tumor)
 
-Evaluation regions:
-- Whole Tumor (WT) = TC + ED (classes 1 + 2)
-- Tumor Core (TC) = class 1 only
-- Edema (ED) = class 2 only
+Evaluation regions (STANDARD BraTS):
+- ET (Enhancing Tumor) = class 3 only
+- TC (Tumor Core) = classes 1 + 3 (NCR + ET)
+- WT (Whole Tumor) = classes 1 + 2 + 3 (all tumor)
 """
 
 import torch
@@ -172,10 +173,12 @@ class MulticlassMetricsAccumulator:
     Accumulates intersection and union for each region across batches,
     then computes global Dice/IoU/HD95 at the end.
 
+    Supports both 3-class (legacy) and 4-class (standard BraTS) schemes.
+
     This is the CORRECT way to compute metrics - accumulate then divide,
     not average per-batch metrics.
     """
-    def __init__(self, num_classes: int = 3, compute_hd95: bool = True):
+    def __init__(self, num_classes: int = 4, compute_hd95: bool = True):
         self.num_classes = num_classes
         self.compute_hd95 = compute_hd95
         self.reset()
@@ -188,6 +191,8 @@ class MulticlassMetricsAccumulator:
         self.union_tc = 0.0
         self.inter_ed = 0.0
         self.union_ed = 0.0
+        self.inter_et = 0.0  # New for 4-class
+        self.union_et = 0.0  # New for 4-class
         self.n_batches = 0
 
         # HD95 accumulators
@@ -197,10 +202,16 @@ class MulticlassMetricsAccumulator:
         self.hd95_tc_count = 0
         self.hd95_ed_sum = 0.0
         self.hd95_ed_count = 0
+        self.hd95_et_sum = 0.0  # New for 4-class
+        self.hd95_et_count = 0  # New for 4-class
 
     def update(self, pred: torch.Tensor, target: torch.Tensor):
         """
         Update accumulators with a new batch.
+
+        Supports both 3-class and 4-class:
+        - 3-class: 0=BG, 1=TC, 2=ED (legacy, ET merged into TC)
+        - 4-class: 0=BG, 1=NCR, 2=ED, 3=ET (standard BraTS)
 
         Args:
             pred: (B, C, H, W) - predicted logits
@@ -211,31 +222,63 @@ class MulticlassMetricsAccumulator:
         pred_classes = torch.argmax(pred, dim=1)  # (B, H, W) - integer [0, C-1]
         target_squeezed = target.squeeze(1)  # (B, H, W)
 
-        # --- TC (Tumor Core) = class 1 only ---
-        pred_tc = (pred_classes == 1).float()  # (B, H, W) - binary 0/1
-        target_tc = (target_squeezed == 1).float()
+        if self.num_classes == 4:
+            # ============ 4-CLASS (STANDARD BraTS) ============
+            # ET (Enhancing Tumor) = class 3 only
+            pred_et = (pred_classes == 3).float()
+            target_et = (target_squeezed == 3).float()
 
-        self.inter_tc += (pred_tc * target_tc).sum().item()
-        self.union_tc += (pred_tc.sum() + target_tc.sum()).item()
+            self.inter_et += (pred_et * target_et).sum().item()
+            self.union_et += (pred_et.sum() + target_et.sum()).item()
 
-        # --- ED (Edema) = class 2 only ---
-        if self.num_classes >= 3:
-            pred_ed = (pred_classes == 2).float()  # (B, H, W) - binary 0/1
+            # TC (Tumor Core) = classes 1 + 3 (NCR + ET)
+            pred_tc = ((pred_classes == 1) | (pred_classes == 3)).float()
+            target_tc = ((target_squeezed == 1) | (target_squeezed == 3)).float()
+
+            self.inter_tc += (pred_tc * target_tc).sum().item()
+            self.union_tc += (pred_tc.sum() + target_tc.sum()).item()
+
+            # ED (Edema) = class 2 only
+            pred_ed = (pred_classes == 2).float()
             target_ed = (target_squeezed == 2).float()
 
             self.inter_ed += (pred_ed * target_ed).sum().item()
             self.union_ed += (pred_ed.sum() + target_ed.sum()).item()
 
-        # --- WT (Whole Tumor) = TC + ED ---
-        if self.num_classes >= 3:
-            pred_wt = (pred_classes >= 1).float()  # Any tumor class
+            # WT (Whole Tumor) = classes 1 + 2 + 3 (all tumor)
+            pred_wt = (pred_classes >= 1).float()
             target_wt = (target_squeezed >= 1).float()
-        else:
-            pred_wt = pred_tc
-            target_wt = target_tc
 
-        self.inter_wt += (pred_wt * target_wt).sum().item()
-        self.union_wt += (pred_wt.sum() + target_wt.sum()).item()
+            self.inter_wt += (pred_wt * target_wt).sum().item()
+            self.union_wt += (pred_wt.sum() + target_wt.sum()).item()
+
+        else:
+            # ============ 3-CLASS (LEGACY) ============
+            # TC = class 1 only (ET already merged)
+            pred_tc = (pred_classes == 1).float()
+            target_tc = (target_squeezed == 1).float()
+
+            self.inter_tc += (pred_tc * target_tc).sum().item()
+            self.union_tc += (pred_tc.sum() + target_tc.sum()).item()
+
+            # ED = class 2 only
+            if self.num_classes >= 3:
+                pred_ed = (pred_classes == 2).float()
+                target_ed = (target_squeezed == 2).float()
+
+                self.inter_ed += (pred_ed * target_ed).sum().item()
+                self.union_ed += (pred_ed.sum() + target_ed.sum()).item()
+
+            # WT = TC + ED
+            if self.num_classes >= 3:
+                pred_wt = (pred_classes >= 1).float()
+                target_wt = (target_squeezed >= 1).float()
+            else:
+                pred_wt = pred_tc
+                target_wt = target_tc
+
+            self.inter_wt += (pred_wt * target_wt).sum().item()
+            self.union_wt += (pred_wt.sum() + target_wt.sum()).item()
 
         # --- Compute HD95 if enabled ---
         if self.compute_hd95:
@@ -287,6 +330,21 @@ class MulticlassMetricsAccumulator:
                         except Exception:
                             pass
 
+                # ET HD95 (only for 4-class)
+                if self.num_classes == 4:
+                    pred_et_np = pred_et.cpu().numpy()
+                    target_et_np = target_et.cpu().numpy()
+                    pred_count_et = np.sum(pred_et_np[i] > 0)
+                    target_count_et = np.sum(target_et_np[i] > 0)
+                    if pred_count_et > 0 and target_count_et > 0:
+                        try:
+                            hd95_val = compute_hausdorff_distance_95(pred_et_np[i], target_et_np[i])
+                            if not np.isinf(hd95_val) and not np.isnan(hd95_val):
+                                self.hd95_et_sum += hd95_val
+                                self.hd95_et_count += 1
+                        except Exception:
+                            pass
+
         self.n_batches += 1
 
     def get_metrics(self) -> Dict[str, float]:
@@ -294,33 +352,41 @@ class MulticlassMetricsAccumulator:
         Compute final global metrics from accumulated values.
 
         Returns:
-            Dictionary with all metrics including HD95
+            Dictionary with all metrics including HD95.
+            For 4-class: includes ET metrics (STANDARD BraTS).
+            For 3-class: ET metrics are 0.0 (legacy).
         """
         eps = 1e-6
 
-        # Compute Dice and IoU for each region
+        # Compute Dice and IoU for WT, TC, ED
         dice_wt = (2.0 * self.inter_wt + eps) / (self.union_wt + eps)
         iou_wt = (self.inter_wt + eps) / (self.union_wt - self.inter_wt + eps)
 
         dice_tc = (2.0 * self.inter_tc + eps) / (self.union_tc + eps)
         iou_tc = (self.inter_tc + eps) / (self.union_tc - self.inter_tc + eps)
 
-        if self.num_classes >= 3:
-            dice_ed = (2.0 * self.inter_ed + eps) / (self.union_ed + eps)
-            iou_ed = (self.inter_ed + eps) / (self.union_ed - self.inter_ed + eps)
+        dice_ed = (2.0 * self.inter_ed + eps) / (self.union_ed + eps)
+        iou_ed = (self.inter_ed + eps) / (self.union_ed - self.inter_ed + eps)
 
+        # Compute ET metrics (only for 4-class)
+        if self.num_classes == 4:
+            dice_et = (2.0 * self.inter_et + eps) / (self.union_et + eps)
+            iou_et = (self.inter_et + eps) / (self.union_et - self.inter_et + eps)
+            # Standard BraTS: mean of ET, TC, WT (not ED)
+            mean_dice = (dice_et + dice_tc + dice_wt) / 3.0
+            mean_iou = (iou_et + iou_tc + iou_wt) / 3.0
+        else:
+            dice_et = 0.0
+            iou_et = 0.0
+            # Legacy 3-class: mean of WT, TC, ED
             mean_dice = (dice_wt + dice_tc + dice_ed) / 3.0
             mean_iou = (iou_wt + iou_tc + iou_ed) / 3.0
-        else:
-            dice_ed = 0.0
-            iou_ed = 0.0
-            mean_dice = (dice_wt + dice_tc) / 2.0
-            mean_iou = (iou_wt + iou_tc) / 2.0
 
         # Compute HD95 for each region
         hd95_wt = self.hd95_wt_sum / self.hd95_wt_count if self.hd95_wt_count > 0 else -1.0
         hd95_tc = self.hd95_tc_sum / self.hd95_tc_count if self.hd95_tc_count > 0 else -1.0
         hd95_ed = self.hd95_ed_sum / self.hd95_ed_count if self.hd95_ed_count > 0 else -1.0
+        hd95_et = self.hd95_et_sum / self.hd95_et_count if self.hd95_et_count > 0 else -1.0
 
         # Compute mean HD95 (only from valid values)
         valid_hd95_values = []
@@ -328,18 +394,22 @@ class MulticlassMetricsAccumulator:
             valid_hd95_values.append(hd95_wt)
         if hd95_tc >= 0:
             valid_hd95_values.append(hd95_tc)
-        if hd95_ed >= 0 and self.num_classes >= 3:
-            valid_hd95_values.append(hd95_ed)
+        if hd95_et >= 0 and self.num_classes == 4:
+            valid_hd95_values.append(hd95_et)
+        # Note: ED not included in standard BraTS mean
 
         mean_hd95 = np.mean(valid_hd95_values) if len(valid_hd95_values) > 0 else -1.0
 
         return {
-            'WT_dice': dice_wt,
-            'WT_iou': iou_wt,
-            'WT_hd95': hd95_wt,
+            'ET_dice': dice_et,  # NEW for 4-class
+            'ET_iou': iou_et,    # NEW for 4-class
+            'ET_hd95': hd95_et,  # NEW for 4-class
             'TC_dice': dice_tc,
             'TC_iou': iou_tc,
             'TC_hd95': hd95_tc,
+            'WT_dice': dice_wt,
+            'WT_iou': iou_wt,
+            'WT_hd95': hd95_wt,
             'ED_dice': dice_ed,
             'ED_iou': iou_ed,
             'ED_hd95': hd95_ed,

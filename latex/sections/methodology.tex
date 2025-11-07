@@ -2,7 +2,10 @@
 
 \subsection{Overview}
 
-AMT-UNet performs simultaneous 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) from 4-channel MRI input ($256 \times 256$: FLAIR, T1, T1CE, T2). The architecture comprises: (1) a residual encoder-decoder with instance normalization and CBAM attention, (2) an adaptive masked transformer bottleneck, and (3) an ROI-guided classification network. Given input $\mathbf{X} \in \mathbb{R}^{4 \times H \times W}$, the model produces segmentation logits $\mathbf{S} \in \mathbb{R}^{3 \times H \times W}$ and classification logits $\mathbf{C} \in \mathbb{R}^{2}$.
+AMT-UNet performs simultaneous 3-class tumor segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) from 4-channel MRI input ($256 \times 256$: FLAIR, T1, T1CE, T2). The architecture comprises: (1) a residual encoder-decoder with instance normalization and CBAM attention, (2) an adaptive masked transformer bottleneck, and (3) an ROI-guided classification network. Figure~\ref{fig:architecture} illustrates the overall architecture. Given input $\mathbf{X} \in \mathbb{R}^{4 \times H \times W}$, the model produces segmentation logits $\mathbf{S} \in \mathbb{R}^{3 \times H \times W}$ and classification logits $\mathbf{C} \in \mathbb{R}^{2}$.
+
+% Include architecture figure
+\input{figures/architecture_placeholder}
 
 \subsection{Encoder-Decoder with Residual Blocks}
 
@@ -108,7 +111,7 @@ The total loss combines segmentation and classification:
 
 Segmentation loss integrates four components:
 \begin{equation}
-\mathcal{L}_{\text{seg}} = \mathcal{L}_{\text{Dice}} + \mathcal{L}_{\text{Focal}} + 2.5\mathcal{L}_{\text{IoU}} + 0.6\mathcal{L}_{\text{Boundary}}
+\mathcal{L}_{\text{seg}} = \mathcal{L}_{\text{Dice}} + \mathcal{L}_{\text{Focal}} + 2.0\mathcal{L}_{\text{IoU}} + 0.5\mathcal{L}_{\text{Boundary}}
 \label{eq:seg_loss}
 \end{equation}
 
@@ -116,13 +119,13 @@ Segmentation loss integrates four components:
 \[
 \mathcal{L}_{\text{Dice}} = \frac{1}{2}\sum_{c=1}^{2} w_c \left(1 - \frac{2\sum_{ij} p_{cij} y_{cij}}{\sum_{ij} p_{cij} + \sum_{ij} y_{cij} + \epsilon}\right)
 \]
-with class weights $w_{\text{TC}}=3.0$, $w_{\text{ED}}=4.0$.
+with class weights $w_{\text{TC}}=3.0$, $w_{\text{ED}}=2.0$.
 
 \textbf{Focal Loss} with $\gamma=3.0$:
 \[
 \mathcal{L}_{\text{Focal}} = -\frac{1}{HW}\sum_{ij} \alpha_{y_{ij}} (1-p_{y_{ij},ij})^{\gamma} \log(p_{y_{ij},ij})
 \]
-where $\alpha = [0.0, 0.4, 0.3]$ for background, TC, ED.
+where $\alpha = [0.0, 0.4, 0.1]$ for background, TC, ED.
 
 \textbf{IoU Loss} for direct metric optimization:
 \[
@@ -147,9 +150,9 @@ where $d_{cij}$ is the signed distance to the nearest boundary.
 
 \subsection{Training Configuration}
 
-\textbf{Optimizer}: AdamW with $\text{lr}=5\times10^{-5}$, $\beta=(0.9, 0.999)$, weight decay $1.5\times10^{-4}$.
+\textbf{Optimizer}: AdamW with $\text{lr}=3\times10^{-5}$, $\beta=(0.9, 0.999)$, weight decay $1.5\times10^{-4}$.
 
-\textbf{Learning Rate Schedule}: Cosine annealing with linear warmup (1000 steps to $5\times10^{-5}$, decay to $5\times10^{-7}$ over 400 epochs).
+\textbf{Learning Rate Schedule}: Cosine annealing with linear warmup (1000 steps to $3\times10^{-5}$, decay to $3\times10^{-7}$ over 400 epochs).
 
 \textbf{Augmentation}: Random horizontal/vertical flips (p=0.5), rotation ($\pm45°$), brightness/contrast adjustment ($\pm0.25$), Gaussian noise (std=0.01, p=0.2).
 

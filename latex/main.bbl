@@ -1,0 +1,101 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\providecommand{\doi}[1]{https://doi.org/#1}
+
+\bibitem{bakas2018brats}
+Bakas, S., Reyes, M., Jakab, A., Bauer, S., Rempfler, M., Crimi, A., Shinohara,
+  R.T., Berger, C., Ha, S.M., Rozycki, M., et~al.: Identifying the best machine
+  learning algorithms for brain tumor segmentation, progression assessment, and
+  overall survival prediction in the brats challenge. arXiv preprint
+  arXiv:1811.02629  (2018)
+
+\bibitem{cao2022swin}
+Cao, H., Wang, Y., Chen, J., Jiang, D., Zhang, X., Tian, Q., Wang, M.:
+  Swin-unet: Unet-like pure transformer for medical image segmentation. In:
+  European conference on computer vision. pp. 205--218. Springer (2022)
+
+\bibitem{caruana1997multitask}
+Caruana, R.: Multitask learning. Machine learning  \textbf{28}(1),  41--75
+  (1997)
+
+\bibitem{chen2021transunet}
+Chen, J., Lu, Y., Yu, Q., Luo, X., Adeli, E., Wang, Y., Lu, L., Yuille, A.L.,
+  Zhou, Y.: Transunet: Transformers make strong encoders for medical image
+  segmentation. arXiv preprint arXiv:2102.04306  (2021)
+
+\bibitem{dosovitskiy2020image}
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X.,
+  Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et~al.:
+  An image is worth 16x16 words: Transformers for image recognition at scale.
+  arXiv preprint arXiv:2010.11929  (2020)
+
+\bibitem{hatamizadeh2022unetr}
+Hatamizadeh, A., Tang, Y., Nath, V., Yang, D., Myronenko, A., Landman, B.,
+  Roth, H.R., Xu, D.: Unetr: Transformers for 3d medical image segmentation.
+  In: Proceedings of the IEEE/CVF winter conference on applications of computer
+  vision. pp. 574--584 (2022)
+
+\bibitem{isensee2021nnu}
+Isensee, F., Jaeger, P.F., Kohl, S.A., Petersen, J., Maier-Hein, K.H.: nnu-net:
+  a self-configuring method for deep learning-based biomedical image
+  segmentation. Nature methods  \textbf{18}(2),  203--211 (2021)
+
+\bibitem{kervadec2019boundary}
+Kervadec, H., Bouchtiba, J., Desrosiers, C., Granger, E., Dolz, J., Ayed, I.B.:
+  Boundary loss for highly unbalanced segmentation. In: International
+  conference on medical imaging with deep learning. pp. 285--296. PMLR (2019)
+
+\bibitem{lee2015deeply}
+Lee, C.Y., Xie, S., Gallagher, P., Zhang, Z., Tu, Z.: Deeply-supervised nets.
+  In: Artificial intelligence and statistics. pp. 562--570. PMLR (2015)
+
+\bibitem{li2018hdenseunet}
+Li, X., Chen, H., Qi, X., Dou, Q., Fu, C.W., Heng, P.A.: H-denseunet: hybrid
+  densely connected unet for liver and tumor segmentation from ct volumes. In:
+  IEEE transactions on medical imaging. vol.~37, pp. 2663--2674. IEEE (2018)
+
+\bibitem{lin2017focal}
+Lin, T.Y., Goyal, P., Girshick, R., He, K., Doll{\'a}r, P.: Focal loss for
+  dense object detection. In: Proceedings of the IEEE international conference
+  on computer vision. pp. 2980--2988 (2017)
+
+\bibitem{mehta2018ynet}
+Mehta, S., Mercan, E., Bartlett, J., Weaver, D., Elmore, J.G., Shapiro, L.:
+  Y-net: joint segmentation and classification for diagnosis of breast biopsy
+  images. International Conference on Medical Image Computing and
+  Computer-Assisted Intervention pp. 893--901 (2018)
+
+\bibitem{menze2015brats}
+Menze, B.H., Jakab, A., Bauer, S., Kalpathy-Cramer, J., Farahani, K., Kirby,
+  J., Burren, Y., Porz, N., Slotboom, J., Wiest, R., et~al.: The multimodal
+  brain tumor image segmentation benchmark (brats). IEEE transactions on
+  medical imaging  \textbf{34}(10),  1993--2024 (2015)
+
+\bibitem{milletari2016vnet}
+Milletari, F., Navab, N., Ahmadi, S.A.: V-net: Fully convolutional neural
+  networks for volumetric medical image segmentation. In: 2016 fourth
+  international conference on 3D vision (3DV). pp. 565--571. IEEE (2016)
+
+\bibitem{oktay2018attention}
+Oktay, O., Schlemper, J., Folgoc, L.L., Lee, M., Heinrich, M., Misawa, K.,
+  Mori, K., McDonagh, S., Hammerla, N.Y., Kainz, B., et~al.: Attention u-net:
+  Learning where to look for the pancreas. In: Medical Imaging with Deep
+  Learning (2018)
+
+\bibitem{ronneberger2015unet}
+Ronneberger, O., Fischer, P., Brox, T.: U-net: Convolutional networks for
+  biomedical image segmentation. In: International Conference on Medical image
+  computing and computer-assisted intervention. pp. 234--241. Springer (2015)
+
+\bibitem{woo2018cbam}
+Woo, S., Park, J., Lee, J.Y., Kweon, I.S.: Cbam: Convolutional block attention
+  module pp. 3--19 (2018)
+
+\bibitem{zhou2018unet++}
+Zhou, Z., Rahman~Siddiquee, M.M., Tajbakhsh, N., Liang, J.: Unet++: A nested
+  u-net architecture for medical image segmentation. Deep learning in medical
+  image analysis and multimodal learning for clinical decision support pp.
+  3--11 (2018)
+
+\end{thebibliography}

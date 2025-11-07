@@ -1,0 +1,12 @@
+% Architecture figure (generated using generate_architecture.py)
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/architecture.pdf}
+\caption{AMT-UNet architecture. The model consists of a CNN encoder-decoder
+with residual blocks and instance normalization, an adaptive masked transformer
+bottleneck for global context modeling with soft masking, CBAM-enhanced skip connections,
+multi-scale feature fusion, and dual outputs for segmentation (3 classes) and ROI-guided
+classification (2 classes). Deep supervision is applied at three decoder scales.}
+\label{fig:architecture}
+\end{figure*}

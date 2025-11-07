@@ -66,8 +66,48 @@ def load_nifti_volume(case_dir, modality):
     return volume
 
 
+def convert_brats_seg_to_4class(seg_slice):
+    """Convert BraTS segmentation to 4-class format (STANDARD BraTS).
+
+    BraTS labels:
+        0: Background
+        1: Necrotic/Non-enhancing tumor (NCR/NET)
+        2: Edema/Peritumoral (ED)
+        4: Enhancing tumor (ET)
+
+    Our 4-class mapping (STANDARD BraTS):
+        0: Background
+        1: NCR/NET (Necrotic) = label 1
+        2: ED (Edema) = label 2
+        3: ET (Enhancing) = label 4
+
+    Evaluation regions:
+        - ET = class 3
+        - TC (Tumor Core) = classes 1 + 3 (NCR + ET)
+        - WT (Whole Tumor) = classes 1 + 2 + 3 (all tumor)
+
+    Args:
+        seg_slice: (H, W) with values {0, 1, 2, 4}
+
+    Returns:
+        mask_4class: (H, W) with values {0, 1, 2, 3}
+    """
+    mask_4class = np.zeros_like(seg_slice, dtype=np.uint8)
+
+    # NCR/NET → class 1
+    mask_4class[seg_slice == 1] = 1
+
+    # Edema → class 2
+    mask_4class[seg_slice == 2] = 2
+
+    # Enhancing Tumor → class 3
+    mask_4class[seg_slice == 4] = 3
+
+    return mask_4class
+
+
 def convert_brats_seg_to_3class(seg_slice):
-    """Convert BraTS segmentation to 3-class format.
+    """Convert BraTS segmentation to 3-class format (DEPRECATED - use 4-class).
 
     BraTS labels:
         0: Background
@@ -247,15 +287,15 @@ def process_case(case_dir, out_dir, img_size=256, slices_per_case=None):
         t1ce_norm = normalize_slice(t1ce_slice)
         t2_norm = normalize_slice(t2_slice)
 
-        # Convert segmentation to 3-class
-        seg_3class = convert_brats_seg_to_3class(seg_slice)
+        # Convert segmentation to 4-class (STANDARD BraTS)
+        seg_4class = convert_brats_seg_to_4class(seg_slice)
 
         # Resize all
         flair_resized = resize_array(flair_norm, img_size, is_mask=False)
         t1_resized = resize_array(t1_norm, img_size, is_mask=False)
         t1ce_resized = resize_array(t1ce_norm, img_size, is_mask=False)
         t2_resized = resize_array(t2_norm, img_size, is_mask=False)
-        seg_resized = resize_array(seg_3class, img_size, is_mask=True)
+        seg_resized = resize_array(seg_4class, img_size, is_mask=True)
 
         # Save images
         for modality, img in [('flair', flair_resized), ('t1', t1_resized),
@@ -426,19 +466,20 @@ def main():
     # Create class mapping file
     import json
     mapping = {
-        "num_classes": 3,
-        "class_names": ["Background", "TumorCore", "Edema"],
-        "class_labels": [0, 1, 2],
+        "num_classes": 4,
+        "class_names": ["Background", "Necrotic", "Edema", "Enhancing"],
+        "class_labels": [0, 1, 2, 3],
+        "note": "STANDARD BraTS 4-class segmentation with separate ET evaluation",
         "regions": {
-            "WT": "Whole Tumor = TC + ED (classes 1,2)",
-            "TC": "Tumor Core = class 1 (BraTS labels 1,4)",
-            "ED": "Edema = class 2 (BraTS label 2)"
+            "ET": "Enhancing Tumor = class 3 (BraTS label 4)",
+            "TC": "Tumor Core = classes 1 + 3 (NCR + ET)",
+            "WT": "Whole Tumor = classes 1 + 2 + 3 (all tumor)"
         },
         "brats_label_mapping": {
             "0": "Background → class 0",
-            "1": "NCR/NET → class 1",
+            "1": "NCR/NET (Necrotic) → class 1",
             "2": "Edema → class 2",
-            "4": "Enhancing Tumor → class 1"
+            "4": "Enhancing Tumor (ET) → class 3"
         }
     }
 

@@ -2,7 +2,7 @@
 
 We presented AMT-UNet, a hybrid CNN-transformer architecture for joint brain tumor segmentation and grade classification. The method combines: (1) an adaptive masked transformer bottleneck that focuses self-attention on tumor-relevant patches, reducing complexity while improving context modeling, (2) an encoder-decoder with instance normalization, residual connections, CBAM attention, and multi-scale fusion for robust feature extraction, (3) ROI-guided multi-task learning with gradient stopping to prevent task interference, and (4) a multi-component loss (Dice, focal, IoU, boundary) with deep supervision for effective optimization.
 
-Experiments on BraTS 2020 demonstrate competitive performance for both segmentation and classification with 37M parameters. Key design choices include: instance normalization for scanner independence, strong focal focusing ($\gamma=3.0$) for extreme class imbalance, high IoU weight (2.5) for metric alignment, and soft masking for efficient global attention.
+Experiments on BraTS 2020 demonstrate competitive performance for both segmentation and classification with 37M parameters. Key design choices include: instance normalization for scanner independence, strong focal focusing ($\gamma=3.0$) for extreme class imbalance, IoU weight (2.0) for metric alignment, and soft masking for efficient global attention.
 
 \subsection{Limitations and Future Work}
 

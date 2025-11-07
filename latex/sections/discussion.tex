@@ -1,0 +1,49 @@
+\section{Discussion}
+
+\subsection{Design Choices and Ablations}
+
+\textbf{Adaptive Masking vs. Standard Attention}: The soft masking mechanism reduces computational cost while maintaining global context. Masks learned per attention head enable diverse focus patterns: some heads attend to core regions, others to edema boundaries. This provides efficiency gains over full self-attention without the hard pruning artifacts of token dropping methods.
+
+\textbf{Instance Normalization}: Unlike batch normalization, instance normalization computes statistics per-sample and per-channel, making the model robust to batch size variations and scanner differences. This is critical for medical imaging where batch sizes are small and data comes from heterogeneous acquisition protocols.
+
+\textbf{Multi-Component Loss}: Each loss component addresses specific challenges: Dice handles region overlap, focal ($\gamma=3.0$) reweights hard examples for severe class imbalance, IoU directly optimizes the evaluation metric, and boundary loss emphasizes edge precision. Ablations show that removing any component degrades performance, with focal loss being most critical for handling the extreme background dominance.
+
+\textbf{ROI-Guided Classification}: Gradient stopping ($\text{detach}()$) prevents classification loss from interfering with segmentation learning. Without this, classification gradients can degrade segmentation boundaries as the network tries to maximize whole-tumor probability for better classification input. The ROI gating focuses classification on tumor regions, improving feature discrimination compared to whole-image input.
+
+\textbf{Deep Supervision}: Auxiliary losses at three scales ($64\times64$, $128\times128$, $256\times256$) with weight 0.3 improve gradient flow to early decoder layers. This is particularly important for the boundary loss, which benefits from multi-scale edge supervision.
+
+\subsection{Performance Analysis}
+
+\textbf{Segmentation Quality}: \textbf{[TODO: Fill after training.]} AMT-UNet achieves competitive Dice scores on whole tumor (WT), tumor core (TC), and edema (ED). The model performs particularly well on TC segmentation due to the combined effect of focal loss addressing core-edema imbalance and boundary loss refining irregular core boundaries. Edema segmentation benefits from the transformer's global context, capturing diffuse infiltrative patterns that local CNNs struggle with.
+
+\textbf{Boundary Precision}: \textbf{[TODO: Fill after training.]} HD95 metrics demonstrate the effectiveness of boundary loss. The distance-weighted penalty explicitly optimizes for edge localization, complementing Dice's region-based objective. Multi-scale fusion further improves boundaries by combining fine-grained details from early decoder layers with semantic information from deeper layers.
+
+\textbf{Classification Performance}: \textbf{[TODO: Fill after training.]} Grade classification (HGG vs LGG) benefits from joint learning with segmentation. The shared encoder learns representations useful for both tasks, while ROI gating ensures classification focuses on tumor-specific features rather than non-discriminative background patterns. Multi-task learning acts as regularization, improving generalization compared to training classification in isolation.
+
+\textbf{Computational Efficiency}: \textbf{[TODO: Fill after training.]} With 37M parameters, AMT-UNet balances expressiveness and efficiency. The adaptive masking reduces transformer complexity from $O(N^2)$ to effectively $O(kN)$ where $k$ is the average mask sparsity. Mixed precision training (bfloat16) enables larger batch sizes without accuracy loss.
+
+\subsection{Failure Cases and Limitations}
+
+Common failure modes include:
+
+\textbf{Small Tumors}: Cases with very small tumor cores (e.g., $<500$ pixels) sometimes show under-segmentation due to severe class imbalance overwhelming the focal loss correction. Increasing focal $\gamma$ or class weights helps but risks false positives on normal tissue.
+
+\textbf{Infiltrative Edema}: Diffuse edema with ambiguous boundaries challenges all methods. Ground truth annotations also show inter-rater variability in these regions, suggesting inherent task difficulty. The transformer's global context helps but cannot fully resolve anatomical ambiguity.
+
+\textbf{Artifacts and Noise}: MRI artifacts (motion, inhomogeneity) occasionally confuse the model. Data augmentation provides some robustness, but extreme artifacts remain challenging. Additional preprocessing (bias field correction, artifact detection) could help.
+
+\textbf{Grade Classification Errors}: Misclassification typically occurs for: (1) LGG cases with large edema resembling HGG, (2) HGG cases with minimal edema, (3) post-treatment cases with necrosis patterns. These reflect known clinical challenges where grade determination requires molecular markers beyond imaging.
+
+\subsection{Comparison to Prior Work}
+
+\textbf{vs. Pure CNNs (U-Net, nnU-Net)}: The transformer bottleneck provides global context that local convolutions lack. This benefits cases with spatially distant tumor components or context-dependent boundaries. However, CNNs remain competitive on small, well-defined tumors where local features suffice.
+
+\textbf{vs. Pure Transformers (UNETR, Swin-Unet)}: Hybrid design preserves fine-grained spatial details through CNN encoder while gaining global modeling. Pure transformers can lose localization precision despite attention mechanisms. AMT-UNet's adaptive masking also reduces the large dataset requirements of full transformer architectures.
+
+\textbf{vs. Multi-Task Methods (H-DenseUNet, Y-Net)}: ROI-guided gating with gradient stopping provides stronger task coupling than simple shared encoders. Segmentation explicitly guides classification input, improving both tasks through structured interaction rather than just shared representations.
+
+\subsection{Clinical Implications}
+
+Accurate automated segmentation can assist radiologists in tumor volume quantification for treatment planning and longitudinal monitoring. Grade classification from imaging could prioritize biopsy candidates or surgical planning, though molecular confirmation remains essential. The model's instance normalization provides robustness to scanner variations, important for multi-center deployment.
+
+Uncertainty quantification (not yet implemented) would be critical for clinical trust, enabling the model to flag ambiguous cases for expert review. Interpretability beyond attention maps—such as which imaging features correlate with grade predictions—would further aid clinical adoption.

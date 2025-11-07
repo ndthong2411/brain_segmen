@@ -1,0 +1,86 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#ADD8E6','primaryTextColor':'#000','primaryBorderColor':'#404040','lineColor':'#404040','secondaryColor':'#90EE90','tertiaryColor':'#FFD700'}}}%%
+graph TB
+    %% Styling
+    classDef input fill:#F0F0F0,stroke:#404040,stroke-width:3px,color:#000
+    classDef encoder fill:#ADD8E6,stroke:#404040,stroke-width:2px,color:#000
+    classDef transformer fill:#FFD700,stroke:#404040,stroke-width:3px,color:#000
+    classDef decoder fill:#90EE90,stroke:#404040,stroke-width:2px,color:#000
+    classDef fusion fill:#DDA0DD,stroke:#404040,stroke-width:2px,color:#000
+    classDef seg fill:#4169E1,stroke:#404040,stroke-width:2px,color:#fff
+    classDef cls fill:#DC143C,stroke:#404040,stroke-width:2px,color:#fff
+    classDef aux fill:#FFA500,stroke:#404040,stroke-width:1px,color:#000
+
+    %% Input
+    INPUT["<b>INPUT</b><br/>4-channel MRI<br/>(FLAIR, T1, T1CE, T2)<br/>256×256×4"]:::input
+
+    %% Encoder
+    E1["<b>Encoder Block 1</b><br/>ResConvBlock<br/>48 channels<br/>256×256"]:::encoder
+    E2["<b>Encoder Block 2</b><br/>ResConvBlock<br/>96 channels<br/>128×128"]:::encoder
+    E3["<b>Encoder Block 3</b><br/>ResConvBlock<br/>192 channels<br/>64×64"]:::encoder
+    E4["<b>Encoder Block 4</b><br/>ResConvBlock<br/>384 channels<br/>32×32"]:::encoder
+
+    %% Transformer
+    TRANS["<b>ADAPTIVE MASKED TRANSFORMER</b><br/>━━━━━━━━━━━━━━━━━━━━<br/>Patch Embed (8×8) → 4 tokens<br/>Soft Mask Generator (MLP)<br/>Masked Self-Attention (4 layers, 8 heads)<br/>Dimension: 384<br/>━━━━━━━━━━━━━━━━━━━━<br/>Output: 384×16×16"]:::transformer
+
+    %% Decoder
+    D4["<b>Decoder Block 4</b><br/>UpConv + CBAM Skip<br/>384 channels<br/>32×32"]:::decoder
+    D3["<b>Decoder Block 3</b><br/>UpConv + CBAM Skip<br/>192 channels<br/>64×64"]:::decoder
+    D2["<b>Decoder Block 2</b><br/>UpConv + CBAM Skip<br/>96 channels<br/>128×128"]:::decoder
+    D1["<b>Decoder Block 1</b><br/>UpConv + CBAM Skip<br/>48 channels<br/>256×256"]:::decoder
+
+    %% Multi-scale Fusion
+    FUSION["<b>MULTI-SCALE FUSION</b><br/>Interpolate D1, D2, D3, D4 to 256×256<br/>Sum → Normalize<br/>Concat with D1"]:::fusion
+
+    %% Segmentation Head
+    SEG["<b>SEGMENTATION HEAD</b><br/>ResConvBlock<br/>Conv 1×1<br/>→ 3 classes<br/>(Background, TC, ED)"]:::seg
+
+    %% Classification Branch
+    ROI["<b>ROI GATING</b><br/>Conv 1×1 (4→1)<br/>× WT probability<br/>(gradient detach)"]:::cls
+    CLS["<b>CLASSIFICATION NET</b><br/>T-Inception<br/>64→128→256<br/>GlobalPool + Dropout(0.3)<br/>→ 2 classes (HGG, LGG)"]:::cls
+
+    %% Auxiliary outputs
+    AUX1["Aux1<br/>256×256"]:::aux
+    AUX2["Aux2<br/>128×128"]:::aux
+    AUX3["Aux3<br/>64×64"]:::aux
+
+    %% Outputs
+    OUT_SEG["<b>Segmentation Output</b><br/>256×256×3"]:::seg
+    OUT_CLS["<b>Classification Output</b><br/>HGG / LGG"]:::cls
+
+    %% Main Flow
+    INPUT --> E1
+    E1 -->|stride 2| E2
+    E2 -->|stride 2| E3
+    E3 -->|stride 2| E4
+    E4 -->|stride 2| TRANS
+    TRANS --> D4
+    D4 -->|upsample| D3
+    D3 -->|upsample| D2
+    D2 -->|upsample| D1
+    D1 --> FUSION
+    FUSION --> SEG
+    SEG --> OUT_SEG
+
+    %% Skip Connections (dashed)
+    E1 -.->|CBAM| D1
+    E2 -.->|CBAM| D2
+    E3 -.->|CBAM| D3
+    E4 -.->|CBAM| D4
+
+    %% Deep Supervision
+    D2 -.-> AUX1
+    D3 -.-> AUX2
+    D4 -.-> AUX3
+
+    %% Classification Branch
+    INPUT --> ROI
+    OUT_SEG -.->|WT prob| ROI
+    ROI --> CLS
+    CLS --> OUT_CLS
+
+    %% Annotations
+    subgraph " "
+        direction LR
+        NOTE1["<b>Key Features:</b><br/>• Instance Normalization<br/>• Residual Connections<br/>• Strided Convolution Downsampling<br/>• CBAM Attention on Skip Connections<br/>• Deep Supervision (weight 0.3)<br/>• Gradient Stopping in ROI Path<br/>• Total Parameters: 37M"]
+        style NOTE1 fill:#FFFACD,stroke:#404040,stroke-width:1px,color:#000
+    end

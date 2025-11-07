@@ -31,7 +31,7 @@
 % If the paper title is too long for the running head, you can set
 % an abbreviated paper title here
 %
-\author{Your Name\inst{1}\orcidID{0000-0000-0000-0000}}
+\author{Your Name\inst{1}\orcidID{0000-0000-0000-0001}}
 %
 \authorrunning{Y. Name et al.}
 % First names are abbreviated in the running head.
@@ -44,7 +44,7 @@
 %
 
 \begin{abstract}
-Brain tumor segmentation and classification from multi-modal MRI are challenging due to irregular boundaries, class imbalance, and limited long-range context in CNNs. We propose AMT-UNet (Adaptive Masked Transformer U-Net), a hybrid architecture combining residual CNN encoder-decoder with an adaptive masked transformer bottleneck. The transformer learns soft masks to focus self-attention on tumor-relevant patches, reducing computational complexity while capturing global context. Skip connections incorporate CBAM attention, and multi-scale fusion combines features from all decoder levels. A multi-component loss (Dice, focal, IoU, boundary) with deep supervision optimizes complementary objectives. Multi-task learning performs joint segmentation and ROI-guided classification with gradient stopping to prevent task interference. Experiments on BraTS 2020 demonstrate competitive performance with 37M parameters.
+Brain tumor segmentation and classification from multi-modal MRI are challenging due to irregular boundaries, severe class imbalance (background:tumor ratio $>$20:1), and limited receptive fields in pure CNNs. We propose AMT-UNet (Adaptive Masked Transformer U-Net), a hybrid architecture combining a residual CNN encoder-decoder (base channels 48, instance normalization) with an adaptive masked transformer bottleneck (4 layers, 8 heads, 384 dimensions). The transformer learns soft masks per attention head to focus computation on tumor-relevant patches, reducing complexity from $O(N^2)$ to effectively $O(kN)$ while capturing global context. CBAM-enhanced skip connections, multi-scale fusion, and a multi-component loss function (Dice + focal[$\gamma$=3.0] + IoU[2.0$\times$] + boundary[0.5$\times$]) with deep supervision at three scales address complementary segmentation challenges. ROI-guided multi-task learning performs joint 3-class segmentation (background, tumor core, edema) and binary grade classification (HGG vs LGG) with gradient stopping to prevent task interference. The model has 37M parameters and is trained on BraTS 2020 (369 cases, 5-fold CV) using AdamW with cosine annealing. \textbf{[TODO: Add quantitative results after training, e.g., "achieving X.XX Dice for WT/TC/ED and X.X\% classification accuracy."]}
 
 \keywords{Brain tumor segmentation \and Transformer \and Multi-task learning \and Medical imaging.}
 \end{abstract}
@@ -55,6 +55,7 @@ Brain tumor segmentation and classification from multi-modal MRI are challenging
 \input{sections/related_work}
 \input{sections/methodology}
 \input{sections/experiments}
+\input{sections/discussion}
 \input{sections/conclusion}
 
 %

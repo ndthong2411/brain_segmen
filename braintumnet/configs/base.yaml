@@ -9,9 +9,9 @@
 # ============================================================
 data:
   backend: "lmdb"
-  raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
-  proc_root: "braintumnet/data/processed_multiclass_full"
-  lmdb_root: "braintumnet/data/lmdb_processed_multiclass_full"
+  raw_root: "E:/thong/code/brain_segmen/braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
+  proc_root: "E:/thong/code/brain_segmen/braintumnet/data/processed_multiclass_4class"  # 4-class BraTS
+  lmdb_root: "E:/thong/code/brain_segmen/braintumnet/data/lmdb_processed_multiclass_4class"  # 4-class BraTS
   modality: "multi"
   img_size: 256
   slices_per_case: 155
@@ -43,12 +43,12 @@ train:
   iou_weight: 2.5
   boundary_weight: 0.0
 
-  # Focal loss
-  focal_alpha: [0.0, 0.4, 0.3]
+  # Focal loss (4-class: BG, NCR, ED, ET)
+  focal_alpha: [0.0, 0.3, 0.4, 0.3]  # UPDATED for 4-class: [BG, NCR, ED, ET]
   focal_gamma: 3.0
 
-  # Class weights
-  class_weights: [1.0, 3.0, 4.0]
+  # Class weights (4-class: BG, NCR, ED, ET)
+  class_weights: [1.0, 3.0, 4.0, 5.0]  # UPDATED: ET gets highest weight (smallest region)
   ignore_background: true
 
   # Deep supervision
@@ -90,7 +90,7 @@ train:
 model:
   model_type: "segunetv2"  # Overridden by --model
   in_channels: 4
-  num_classes_seg: 3
+  num_classes_seg: 4       # UPDATED: 4-class (0=BG, 1=NCR, 2=ED, 3=ET) - STANDARD BraTS
   num_classes_cls: 2
 
   # SegUNetV2 defaults (overridden for other models)

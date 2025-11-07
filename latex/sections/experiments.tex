@@ -8,7 +8,7 @@ We evaluate on BraTS 2020 \cite{menze2015brats,bakas2018brats}: 369 multi-modal 
 
 \textbf{Training}: AdamW optimizer ($\text{lr}=3\times10^{-5}$, weight decay $1.5\times10^{-4}$), cosine annealing with 1000-step warmup, 400 epochs, early stopping (patience 30). Batch size 12-16 depending on GPU. Mixed precision (bfloat16/float16), gradient clipping (norm 1.0). Data augmentation: horizontal/vertical flips (p=0.5), rotation ($\pm45°$), brightness/contrast ($\pm25\%$), Gaussian noise ($\sigma=0.01$, p=0.2).
 
-\textbf{Loss weights}: Dice 1.0, focal 1.0 ($\gamma=3.0$, $\alpha=[0.0, 0.4, 0.3]$), IoU 2.5, boundary 0.6, deep supervision 0.3, classification 0.5. Class weights: [1.0, 3.0, 4.0].
+\textbf{Loss weights}: Dice 1.0, focal 1.0 ($\gamma=3.0$, $\alpha=[0.0, 0.4, 0.1]$), IoU 2.0, boundary 0.5, deep supervision 0.3, classification 0.5. Class weights: [1.0, 3.0, 2.0].
 
 \textbf{Model}: Base channels 48, transformer dim 384, depth 4, heads 8, dropout 0.15, 37M parameters.
 

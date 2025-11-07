@@ -25,7 +25,9 @@
       "Bash(mkdir:*)",
       "Bash(copy \"E:\\thong\\code\\brain_segmen\\latex\\template\\llncs.cls\" \"E:\\thong\\code\\brain_segmen\\latex\\llncs.cls\")",
       "Bash(copy:*)",
-      "Bash(pdflatex:*)"
+      "Bash(pdflatex:*)",
+      "Bash(bibtex main:*)",
+      "Bash(set PYTHONIOENCODING=utf-8:*)"
     ],
     "deny": [],
     "ask": []
