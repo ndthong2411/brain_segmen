@@ -27,7 +27,7 @@ train:
   # Training schedule
   epochs: 400
   batch_size: 12          # Default for 3090 (24GB)
-  val_batch_size: 8       # Smaller val batches to keep 4-class eval fast
+  val_batch_size: 16       # Full validation batch size
   lr: 5.0e-5
   weight_decay: 1.5e-4
   workers: 12
@@ -78,7 +78,7 @@ train:
 
   # Training control
   early_stop_patience: 30
-  val_interval: 2         # Run full validation every other epoch to save time
+  val_interval: 1         # Validate every epoch
   compute_hd95: false     # Disable expensive HD95 during training; run evaluate.py when needed
 
   # Logging

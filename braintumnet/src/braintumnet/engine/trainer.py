@@ -432,6 +432,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
     epochs_without_improvement = 0
 
     logger.info(f"Starting training for {cfg['train']['epochs']} epochs...")
+    last_val_metrics = None  # Cache last computed validation metrics when val is skipped
 
     for epoch in range(start_epoch, cfg["train"]["epochs"]):
         epoch_start_time = time.time()
@@ -745,13 +746,41 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
                 et_dice = et_iou = et_hd95 = wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
             acc_m = cls_acc_sum / cls_batches if cls_batches > 0 else 0.0
+            last_val_metrics = {
+                'dice': dice_m,
+                'iou': iou_m,
+                'hd95': hd95_m,
+                'acc': acc_m,
+                'et_dice': et_dice, 'et_iou': et_iou, 'et_hd95': et_hd95,
+                'tc_dice': tc_dice, 'tc_iou': tc_iou, 'tc_hd95': tc_hd95,
+                'wt_dice': wt_dice, 'wt_iou': wt_iou, 'wt_hd95': wt_hd95,
+                'ed_dice': ed_dice, 'ed_iou': ed_iou, 'ed_hd95': ed_hd95,
+            }
         else:
             # Skip validation this epoch
-            iou_m = best_iou  # Use previous best
-            dice_m = 0.0
-            acc_m = 0.0
-            hd95_m = 0.0
-            et_dice = et_iou = et_hd95 = wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
+            if last_val_metrics is not None:
+                dice_m = last_val_metrics['dice']
+                iou_m = last_val_metrics['iou']
+                hd95_m = last_val_metrics['hd95']
+                acc_m = last_val_metrics['acc']
+                et_dice = last_val_metrics['et_dice']
+                et_iou = last_val_metrics['et_iou']
+                et_hd95 = last_val_metrics['et_hd95']
+                tc_dice = last_val_metrics['tc_dice']
+                tc_iou = last_val_metrics['tc_iou']
+                tc_hd95 = last_val_metrics['tc_hd95']
+                wt_dice = last_val_metrics['wt_dice']
+                wt_iou = last_val_metrics['wt_iou']
+                wt_hd95 = last_val_metrics['wt_hd95']
+                ed_dice = last_val_metrics['ed_dice']
+                ed_iou = last_val_metrics['ed_iou']
+                ed_hd95 = last_val_metrics['ed_hd95']
+            else:
+                iou_m = best_iou  # Use previous best
+                dice_m = 0.0
+                acc_m = 0.0
+                hd95_m = -1.0
+                et_dice = et_iou = et_hd95 = wt_dice = wt_iou = wt_hd95 = tc_dice = tc_iou = tc_hd95 = ed_dice = ed_iou = ed_hd95 = 0.0
         avg_train_loss = train_loss_sum / len(train_loader)
         epoch_time = time.time() - epoch_start_time
 
