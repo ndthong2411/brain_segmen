@@ -298,6 +298,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
     # Setup loss function with class imbalance handling
     loss_type = cfg["train"].get("loss_type", "dice_ce")
+    compute_hd95 = cfg["train"].get("compute_hd95", True)
 
     # Check if using new Ultimate loss system (Phase 1+)
     if loss_type in ["ultimate", "ultimate_multitask"]:
@@ -583,7 +584,10 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
             # Initialize multiclass metrics accumulator if num_classes > 1, else use binary
             num_classes_seg = cfg["model"].get("num_classes_seg", 1)
             if num_classes_seg > 1:
-                metrics_acc = MulticlassMetricsAccumulator(num_classes=num_classes_seg)
+                metrics_acc = MulticlassMetricsAccumulator(
+                    num_classes=num_classes_seg,
+                    compute_hd95=compute_hd95
+                )
             else:
                 total_inter, total_union = 0.0, 0.0
                 hd95_sum, hd95_count = 0.0, 0
@@ -679,13 +683,17 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
                     # Compute current metrics for progress bar
                     if HAS_TQDM:
                         if num_classes_seg > 1:
-                            # Show running multiclass metrics
+                            # Show running multiclass metrics, adapt labels for 4-class BraTS
                             curr_metrics = metrics_acc.get_metrics()
-                            val_pbar.set_postfix({
+                            postfix = {
                                 'WT': f'{curr_metrics["WT_dice"]:.4f}',
                                 'TC': f'{curr_metrics["TC_dice"]:.4f}',
-                                'ED': f'{curr_metrics["ED_dice"]:.4f}'
-                            })
+                            }
+                            if num_classes_seg == 4:
+                                postfix['ET'] = f'{curr_metrics["ET_dice"]:.4f}'
+                            else:
+                                postfix['ED'] = f'{curr_metrics["ED_dice"]:.4f}'
+                            val_pbar.set_postfix(postfix)
                         elif total_union > 0:
                             curr_dice = (2 * total_inter) / (total_union + 1e-6)
                             curr_hd95 = hd95_sum / hd95_count if hd95_count > 0 else 0.0

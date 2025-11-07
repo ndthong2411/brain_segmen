@@ -8,7 +8,7 @@
 # DATA CONFIG
 # ============================================================
 data:
-  backend: "lmdb"
+  backend: "png"
   raw_root: "braintumnet/data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData"
   proc_root: "braintumnet/data/processed_multiclass_4class"  # 4-class BraTS
   lmdb_root: "braintumnet/data/lmdb_processed_multiclass_4class"  # 4-class BraTS
@@ -27,7 +27,7 @@ train:
   # Training schedule
   epochs: 400
   batch_size: 12          # Default for 3090 (24GB)
-  val_batch_size: 24
+  val_batch_size: 8       # Smaller val batches to keep 4-class eval fast
   lr: 5.0e-5
   weight_decay: 1.5e-4
   workers: 12
@@ -78,7 +78,8 @@ train:
 
   # Training control
   early_stop_patience: 30
-  val_interval: 1
+  val_interval: 2         # Run full validation every other epoch to save time
+  compute_hd95: false     # Disable expensive HD95 during training; run evaluate.py when needed
 
   # Logging
   log_interval: 10
