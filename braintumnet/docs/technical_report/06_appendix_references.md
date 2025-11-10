@@ -23,7 +23,7 @@ Một trang duy nhất để tra cứu nhanh các lệnh, đường dẫn và b�
 
 ```bash
 # 1. Preprocess BraTS (NIfTI -> PNG + CSV)
-python braintumnet/scripts/preprocess_nifti_to_multiclass.py \
+python braintumnet/scripts/preprocessing/preprocess_nifti_to_multiclass.py \
     --nifti_dir <RAW_DIR> \
     --out_dir braintumnet/data/processed_multiclass \
     --img_size 256 \
@@ -31,7 +31,7 @@ python braintumnet/scripts/preprocess_nifti_to_multiclass.py \
     --num_folds 5
 
 # 2. Convert PNG -> LMDB
-python braintumnet/scripts/convert_to_lmdb.py \
+python braintumnet/scripts/preprocessing/convert_to_lmdb.py \
     --png_root braintumnet/data/processed_multiclass \
     --lmdb_root braintumnet/data/lmdb_processed_multiclass \
     --map_size 50

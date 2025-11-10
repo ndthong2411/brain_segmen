@@ -966,13 +966,13 @@ src/braintumnet/
 │   ├── metrics_logger.py  # CSV/JSON logging
 │   └── seed.py      # Reproducibility
 │
-├── losses.py               # Binary loss functions
-├── losses_multiclass.py    # Multi-class losses ⭐ NEW
-├── losses_combined.py      # Ultimate 5-component loss ⭐ NEW
-├── losses_boundary.py      # Boundary loss ⭐ NEW
-├── losses_iou.py          # IoU loss ⭐ NEW
-├── metrics.py             # Binary metrics
-└── multiclass_metrics.py  # Multi-class metrics ⭐ NEW
+├── losses/base.py               # Binary loss functions
+├── losses/multiclass.py    # Multi-class losses ⭐ NEW
+├── losses/combined.py      # Ultimate 5-component loss ⭐ NEW
+├── losses/boundary.py      # Boundary loss ⭐ NEW
+├── losses/iou.py          # IoU loss ⭐ NEW
+├── metrics/base.py             # Binary metrics
+└── metrics/multiclass.py  # Multi-class metrics ⭐ NEW
 ```
 
 ### Scripts (Entry Points)
@@ -990,12 +990,12 @@ scripts/
 **Sử dụng**:
 ```bash
 # Preprocessing
-python scripts/preprocess_h5_to_multiclass.py \
+python scripts/preprocessing/preprocess_h5_to_multiclass.py \
     --h5_dir "E:\data\brats2020" \
     --out_dir "data/processed_multiclass"
 
 # Training
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 
 # Evaluation
 python scripts/evaluate.py --ckpt checkpoints/best_fold0.pth --fold 0

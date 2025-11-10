@@ -148,7 +148,7 @@ Class 2: Edema (BraTS label 2)
 
 ### File Code
 
-**File**: `scripts/preprocess_h5_to_multiclass.py` (240 dòng)
+**File**: `scripts/preprocessing/preprocess_h5_to_multiclass.py` (240 dòng)
 
 ### Main Function
 

@@ -23,7 +23,7 @@ Tài liệu này giải thích rõ cách BrainTumNet training, các loại loss,
 
 ### 2.1 MultiTaskLoss (loss chuẩn cũ)
 
-- File: `braintumnet/src/braintumnet/losses.py > MultiTaskLoss`.
+- File: `braintumnet/src/braintumnet/losses/base.py > MultiTaskLoss`.
 - Thành phần:
   - `seg_loss`: tùy `loss_type` (Dice-CE, Dice-Focal, Multiclass…) với auto mapping.
   - `cls_loss`: CrossEntropy cho branch phân loại (HGG/LGG).
@@ -35,7 +35,7 @@ Tài liệu này giải thích rõ cách BrainTumNet training, các loại loss,
 
 ### 2.2 UltimateLoss / UltimateMultiTaskLoss
 
-- File: `braintumnet/src/braintumnet/losses_combined.py`.
+- File: `braintumnet/src/braintumnet/losses/combined.py`.
 - Kích hoạt khi `loss_type` là `"ultimate"` hoặc `"ultimate_multitask"`.
 - Bao gồm Dice + Focal + IoU + Boundary, cộng thêm deep supervision (aux) và classification nếu bật.
 - Phù hợp khi bạn muốn tối đa hóa IoU (cấu hình `dice_weight`, `focal_weight`, `iou_weight`, `boundary_weight`).

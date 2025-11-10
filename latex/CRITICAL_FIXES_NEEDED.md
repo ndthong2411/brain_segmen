@@ -21,8 +21,8 @@ Based on comprehensive review comparing to MICCAI/CVPR standards.
 ```bash
 # Complete training first
 cd braintumnet
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 1
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 1
 # ... run all 5 folds
 
 # Then evaluate and fill tables

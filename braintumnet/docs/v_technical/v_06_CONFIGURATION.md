@@ -222,7 +222,7 @@ seg_loss_fn = MultiClassCombinedLoss(
 
 ## 3. Phase 2 Small Config
 
-### File: `configs/phase2_small.yaml`
+### File: `configs/phases/phase2_small.yaml`
 
 ```yaml
 # ============================================
@@ -346,7 +346,7 @@ logging:
 
 ## 4. A100 Optimized Config
 
-### File: `configs/phase2_a100.yaml`
+### File: `configs/phases/phase2_a100.yaml`
 
 ```yaml
 # ============================================
@@ -687,7 +687,7 @@ def create_experiment(name, config):
     return exp_dir
 
 # Usage
-cfg = load_config('configs/phase2_small.yaml')
+cfg = load_config('configs/phases/phase2_small.yaml')
 exp_dir = create_experiment('braintumnet_v2_small_fold0', cfg)
 ```
 

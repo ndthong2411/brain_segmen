@@ -9,7 +9,7 @@
 ## What Was Done
 
 ### 1. Created Preprocessing Script
-- **File**: `scripts/preprocess_h5_to_multiclass.py`
+- **File**: `scripts/preprocessing/preprocess_h5_to_multiclass.py`
 - **Input**: 57,195 H5 files from BraTS 2020 dataset
 - **Output**: PNG images + 3-class masks
 
@@ -205,7 +205,7 @@ done
 ## Files Created
 
 ### Scripts
-- `scripts/preprocess_h5_to_multiclass.py` - Main preprocessing script
+- `scripts/preprocessing/preprocess_h5_to_multiclass.py` - Main preprocessing script
 - `scripts/check_h5_format.py` - H5 format inspection
 - `scripts/check_h5_tumor.py` - Find H5 files with tumor
 

@@ -158,7 +158,7 @@ Global pool → Dropout(0.3) → Linear(256 → 2)
 ### Ultimate Combined Loss
 
 ```python
-# From losses_combined.py
+# From losses/combined.py
 L_total = w_seg * L_seg + w_cls * L_cls
   where w_seg = 1.0, w_cls = 0.5
 
@@ -169,7 +169,7 @@ L_seg = w_D * L_Dice + w_F * L_Focal + w_I * L_IoU + w_B * L_Boundary
 ### Dice Loss (Multi-Class)
 
 ```python
-# From losses_multiclass.py lines 42-83
+# From losses/multiclass.py lines 42-83
 # For each class c in {1, 2} (skip background):
 pred_c = softmax(logits)[:, c, :, :]
 target_c = one_hot(target)[:, c, :, :]
@@ -187,7 +187,7 @@ L_Dice = mean([loss_1, loss_2])
 ### Focal Loss (Multi-Class)
 
 ```python
-# From losses_multiclass.py lines 107-138
+# From losses/multiclass.py lines 107-138
 # Focal loss with class weights and focusing parameter
 probs = softmax(logits)  # (B, C, H, W)
 pt = probs[target_indices]  # Probability of true class
@@ -202,7 +202,7 @@ L_Focal = mean(alpha_t * focal_weight * ce)
 ### IoU Loss (Multi-Class)
 
 ```python
-# From losses_iou.py lines 49-96
+# From losses/iou.py lines 49-96
 # For each class c in {1, 2}:
 pred_c = softmax(logits)[:, c, :, :]
 target_c = one_hot(target)[:, c, :, :]
@@ -220,7 +220,7 @@ L_IoU = mean([loss_1, loss_2])
 ### Boundary Loss
 
 ```python
-# From losses_boundary.py lines 93-146
+# From losses/boundary.py lines 93-146
 # For each class c and sample b:
 target_mask = (target == c).float()
 
@@ -241,7 +241,7 @@ L_Boundary = mean(weighted_error)
 ### Deep Supervision
 
 ```python
-# From losses_combined.py lines 191-221
+# From losses/combined.py lines 191-221
 # Main output loss
 L_main = L_seg(seg_main, target)
 
@@ -257,7 +257,7 @@ L_seg_total = L_main + w_aux * (L_aux3 + L_aux2 + L_aux1)
 ### Classification Loss
 
 ```python
-# From losses_combined.py line 228
+# From losses/combined.py line 228
 L_cls = CrossEntropyLoss(cls_logits, cls_target)
 ```
 
@@ -327,7 +327,7 @@ RandomBrightnessContrast(
 GaussianNoise(std=0.01, p=0.2)
 ```
 
-## Evaluation Metrics (from multiclass_metrics.py)
+## Evaluation Metrics (from metrics/multiclass.py)
 
 ### Dice Coefficient
 
@@ -463,11 +463,11 @@ All formulas and specifications extracted from:
 - `braintumnet/src/braintumnet/models/masked_transformer.py` (105 lines)
 - `braintumnet/src/braintumnet/models/cbam.py` (33 lines)
 - `braintumnet/src/braintumnet/models/t_inception.py` (51 lines)
-- `braintumnet/src/braintumnet/losses_combined.py` (425 lines)
-- `braintumnet/src/braintumnet/losses_multiclass.py` (239 lines)
-- `braintumnet/src/braintumnet/losses_iou.py` (325 lines)
-- `braintumnet/src/braintumnet/losses_boundary.py` (364 lines)
-- `braintumnet/src/braintumnet/multiclass_metrics.py` (324 lines)
-- `braintumnet/configs/phase2_a100.yaml` (187 lines)
+- `braintumnet/src/braintumnet/losses/combined.py` (425 lines)
+- `braintumnet/src/braintumnet/losses/multiclass.py` (239 lines)
+- `braintumnet/src/braintumnet/losses/iou.py` (325 lines)
+- `braintumnet/src/braintumnet/losses/boundary.py` (364 lines)
+- `braintumnet/src/braintumnet/metrics/multiclass.py` (324 lines)
+- `braintumnet/configs/phases/phase2_a100.yaml` (187 lines)
 
 All numbers are exact as implemented in the code.

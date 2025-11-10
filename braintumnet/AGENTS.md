@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Core code lives in `braintumnet/src/braintumnet`, grouped into `data` for preprocessing utilities, `engine` for training loops, `models` for network definitions, and `utils` for shared helpers alongside `losses.py` and `metrics.py`. Command-line entry points sit in `braintumnet/scripts` (`train.py`, `evaluate.py`, `prepare_brats2020.py`, `visualize_batch.py`). Versioned configuration defaults are tracked in `braintumnet/configs/default.yaml`. Keep processed BraTS2020 slices under `braintumnet/data/processed` and raw archives in `brats2020_data/`; both locations are intentionally git-ignored.
+Core code lives in `braintumnet/src/braintumnet`, grouped into `data` for preprocessing utilities, `engine` for training loops, `models` for network definitions, and `utils` for shared helpers alongside `losses/base.py` and `metrics/base.py`. Command-line entry points sit in `braintumnet/scripts` (`train.py`, `evaluate.py`, `prepare_brats2020.py`, `visualize_batch.py`). Versioned configuration defaults are tracked in `braintumnet/configs/default.yaml`. Keep processed BraTS2020 slices under `braintumnet/data/processed` and raw archives in `brats2020_data/`; both locations are intentionally git-ignored.
 
 ## Build, Test, and Development Commands
 Create an isolated environment, install dependencies, and ensure CUDA visibility where available:

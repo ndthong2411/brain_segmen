@@ -17,7 +17,7 @@
 ### Files đã thay đổi:
 1. ✅ `src/braintumnet/models/seg_unet.py` - Thêm deep supervision
 2. ✅ `src/braintumnet/models/braintumnet.py` - Update wrapper
-3. ✅ `src/braintumnet/losses.py` - Thêm BoundaryLoss class
+3. ✅ `src/braintumnet/losses/base.py` - Thêm BoundaryLoss class
 4. ✅ `src/braintumnet/engine/trainer.py` - Update training loop
 5. ✅ `configs/improved_v1_deep_supervision.yaml` - Config với deep supervision
 6. ✅ `configs/improved_v2_boundary_loss.yaml` - Config với boundary loss
@@ -212,7 +212,7 @@ IoU = 6/10 = 0.600        (thấp hơn nhiều)
 
 ### 📝 Code Implementation
 
-#### A. BoundaryLoss Class (`losses.py`)
+#### A. BoundaryLoss Class (`losses/base.py`)
 
 ```python
 from scipy.ndimage import distance_transform_edt

@@ -210,7 +210,7 @@ class SwinTransformerBlock:
 
 ### 6. **Loss Function** ⚠️ NOT OPTIMIZED FOR IoU
 
-#### Your Implementation ([losses_multiclass.py:20-82](../src/braintumnet/losses_multiclass.py#L20-L82))
+#### Your Implementation ([losses/multiclass.py:20-82](../src/braintumnet/losses/multiclass.py#L20-L82))
 ```python
 class MultiClassDiceLoss:  # ✅ Dice loss
 class MultiClassFocalLoss:  # ✅ Focal loss
@@ -397,7 +397,7 @@ model:
 **Effort**: 3 hours | **Gain**: +3-5% IoU
 
 ```python
-# braintumnet/src/braintumnet/losses_multiclass.py
+# braintumnet/src/braintumnet/losses/multiclass.py
 
 class IoULoss(nn.Module):
     """Direct IoU loss"""

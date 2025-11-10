@@ -580,11 +580,11 @@ src/braintumnet/
 │   ├── metrics_logger.py  # CSV/JSON logging
 │   └── seed.py      # Reproducibility
 │
-├── losses.py               # Loss functions (Binary)
-├── losses_multiclass.py    # Multi-class losses ⭐ NEW
-├── losses_combined.py      # Ultimate 5-component loss ⭐ NEW
-├── metrics.py              # Evaluation metrics (Binary)
-└── multiclass_metrics.py   # Multi-class metrics ⭐ NEW
+├── losses/base.py               # Loss functions (Binary)
+├── losses/multiclass.py    # Multi-class losses ⭐ NEW
+├── losses/combined.py      # Ultimate 5-component loss ⭐ NEW
+├── metrics/base.py              # Evaluation metrics (Binary)
+└── metrics/multiclass.py   # Multi-class metrics ⭐ NEW
 ```
 
 ### Scripts (Entry Points)

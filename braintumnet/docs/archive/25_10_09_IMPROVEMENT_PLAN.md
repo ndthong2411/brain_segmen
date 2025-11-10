@@ -195,7 +195,7 @@ Thêm **Boundary Loss** hoặc **Hausdorff Distance Loss** để penalize bounda
 
 #### Option A: Boundary Loss (Recommended - dễ hơn)
 ```python
-# File: src/braintumnet/losses.py
+# File: src/braintumnet/losses/base.py
 
 import torch
 import torch.nn as nn
@@ -1248,7 +1248,7 @@ print(f"Ensemble - Dice: {dice:.4f}, IoU: {iou:.4f}")
 **Goal**: Dice 0.925+, IoU 0.88+
 
 **Day 1-3: Boundary Loss**
-- [ ] Implement BoundaryLoss trong `losses.py`
+- [ ] Implement BoundaryLoss trong `losses/base.py`
 - [ ] (Optional) Implement HausdorffDistanceLoss
 - [ ] Integrate vào MultiTaskLoss
 - [ ] Tune loss weights: Dice:BCE:Boundary = 0.5:0.3:0.2
@@ -1507,8 +1507,8 @@ tail -f logs/train_fold0_v1.log
 **Morning (4 hours)**:
 ```bash
 # 1. Implement Boundary Loss
-# Edit: src/braintumnet/losses.py (add BoundaryLoss class)
-# Edit: src/braintumnet/losses.py (update MultiTaskLoss)
+# Edit: src/braintumnet/losses/base.py (add BoundaryLoss class)
+# Edit: src/braintumnet/losses/base.py (update MultiTaskLoss)
 
 # 2. Install dependencies
 pip install scipy

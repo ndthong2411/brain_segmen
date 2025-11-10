@@ -145,7 +145,7 @@ Output: test_prediction.png (763 KB)
 ---
 
 ### 7. Metrics Calculation ✅
-**Test:** `test_metrics.py`
+**Test:** `test_metrics/base.py`
 
 **Segmentation Metrics:**
 - ✅ IoU Score: Perfect=1.0000, Range=[0,1]

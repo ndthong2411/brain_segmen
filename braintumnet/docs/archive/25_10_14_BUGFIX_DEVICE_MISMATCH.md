@@ -16,7 +16,7 @@ python scripts/train.py --cfg configs/phase1_iou_focus.yaml --fold 4
 **Error**:
 ```
 RuntimeError: indices should be either on cpu or on the same device as the indexed tensor (cpu)
-  File "E:\thong\code\brain_segmen\braintumnet\src\braintumnet\losses_multiclass.py", line 132, in forward
+  File "E:\thong\code\brain_segmen\braintumnet\src\braintumnet\losses/multiclass.py", line 132, in forward
     alpha_t = self.alpha[target_flat]
 ```
 
@@ -30,7 +30,7 @@ RuntimeError: indices should be either on cpu or on the same device as the index
 
 ## Files Fixed
 
-### 1. losses_multiclass.py
+### 1. losses/multiclass.py
 
 #### Fix 1: MultiClassFocalLoss - Line 132
 
@@ -71,7 +71,7 @@ weighted_loss = dice_loss * class_weight
 
 ---
 
-### 2. losses_iou.py
+### 2. losses/iou.py
 
 #### Fix: MulticlassIoULoss - Line 86
 
@@ -90,7 +90,7 @@ weighted_iou = iou * class_weight
 
 ---
 
-### 3. losses_boundary.py
+### 3. losses/boundary.py
 
 **Status**: ✅ No fix needed
 
@@ -101,7 +101,7 @@ return torch.from_numpy(sdf).float().to(mask.device)  # Line 73
 
 ---
 
-### 4. losses_combined.py
+### 4. losses/combined.py
 
 **Status**: ✅ No fix needed
 
@@ -214,10 +214,10 @@ loss.backward()
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
-| losses_multiclass.py | 123 | torch.arange on CPU | Added `device=target_flat.device` |
-| losses_multiclass.py | 132 | self.alpha on CPU | Added `.to(target_flat.device)` |
-| losses_multiclass.py | 76 | self.class_weights on CPU | Added `.to(dice_loss.device)` |
-| losses_iou.py | 86 | self.class_weights on CPU | Added `.to(iou.device)` |
+| losses/multiclass.py | 123 | torch.arange on CPU | Added `device=target_flat.device` |
+| losses/multiclass.py | 132 | self.alpha on CPU | Added `.to(target_flat.device)` |
+| losses/multiclass.py | 76 | self.class_weights on CPU | Added `.to(dice_loss.device)` |
+| losses/iou.py | 86 | self.class_weights on CPU | Added `.to(iou.device)` |
 
 **Total lines changed**: 4 lines across 2 files
 

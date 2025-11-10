@@ -25,7 +25,7 @@ Fixed **7 critical bugs** across 4 categories:
 #### Bug 1.1: MultiClassFocalLoss alpha tensor
 **Error**: `RuntimeError: indices should be either on cpu or on the same device as the indexed tensor (cpu)`
 
-**Fix** ([losses_multiclass.py:132](../src/braintumnet/losses_multiclass.py#L132)):
+**Fix** ([losses/multiclass.py:132](../src/braintumnet/losses/multiclass.py#L132)):
 ```python
 # Before
 alpha_t = self.alpha[target_flat]
@@ -35,7 +35,7 @@ alpha_t = self.alpha.to(target_flat.device)[target_flat]
 ```
 
 #### Bug 1.2: MultiClassDiceLoss class_weights
-**Fix** ([losses_multiclass.py:76](../src/braintumnet/losses_multiclass.py#L76)):
+**Fix** ([losses/multiclass.py:76](../src/braintumnet/losses/multiclass.py#L76)):
 ```python
 # Before
 weighted_loss = dice_loss * self.class_weights[c]
@@ -46,7 +46,7 @@ weighted_loss = dice_loss * class_weight
 ```
 
 #### Bug 1.3: MulticlassIoULoss class_weights
-**Fix** ([losses_iou.py:86](../src/braintumnet/losses_iou.py#L86)):
+**Fix** ([losses/iou.py:86](../src/braintumnet/losses/iou.py#L86)):
 ```python
 # Before
 weighted_iou = iou * self.class_weights[c]
@@ -65,7 +65,7 @@ weighted_iou = iou * class_weight
 
 **Root Cause**: Dataloader returns masks as (B, 1, H, W), code assumed (B, H, W)
 
-**Fix** ([losses_combined.py:189-200](../src/braintumnet/losses_combined.py#L189)):
+**Fix** ([losses/combined.py:189-200](../src/braintumnet/losses/combined.py#L189)):
 ```python
 # Before
 target_resized = F.interpolate(
@@ -91,7 +91,7 @@ target_resized = F.interpolate(
 #### Bug 2.2: Classification target dimension
 **Potential Error**: CrossEntropyLoss expects (B,) but might receive (B, 1)
 
-**Fix** ([losses_combined.py:216-220](../src/braintumnet/losses_combined.py#L216)):
+**Fix** ([losses/combined.py:216-220](../src/braintumnet/losses/combined.py#L216)):
 ```python
 # Before
 cls_l = self.cls_loss(cls_logits, cls_target)
@@ -172,9 +172,9 @@ writer.add_scalar('train/loss_cls', l_cls_val, step)
 
 | File | Lines Changed | Category | Description |
 |------|---------------|----------|-------------|
-| losses_multiclass.py | 3 edits | Device mismatch | Alpha and class_weights device transfer |
-| losses_iou.py | 1 edit | Device mismatch | class_weights device transfer |
-| losses_combined.py | 2 edits | Dimensions | Target/cls_target dimension handling |
+| losses/multiclass.py | 3 edits | Device mismatch | Alpha and class_weights device transfer |
+| losses/iou.py | 1 edit | Device mismatch | class_weights device transfer |
+| losses/combined.py | 2 edits | Dimensions | Target/cls_target dimension handling |
 | phase1_iou_focus.yaml | 2 edits | Config | Data path + focal_alpha background fix |
 | trainer.py | 1 edit | Logging | Float/tensor handling for TensorBoard |
 

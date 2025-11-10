@@ -110,8 +110,8 @@ metrics = {
 ```
 
 **New Files**:
-- `src/braintumnet/multiclass_metrics.py` (280 lines)
-- `src/braintumnet/losses_multiclass.py` (239 lines)
+- `src/braintumnet/metrics/multiclass.py` (280 lines)
+- `src/braintumnet/losses/multiclass.py` (239 lines)
 
 ### 1.3 ROI Gating for Multi-Class
 
@@ -379,7 +379,7 @@ base=64, dim=512, depth=4, n_heads=8  # ~87M parameters
 
 #### Phase 0: Original Binary Loss
 ```python
-# losses.py (simple)
+# losses/base.py (simple)
 class MultiTaskLoss(nn.Module):
     def __init__(self):
         self.seg_loss = nn.BCEWithLogitsLoss()  # Binary
@@ -393,7 +393,7 @@ class MultiTaskLoss(nn.Module):
 
 #### Phase 1: Multi-Class Dice + Focal
 ```python
-# losses_multiclass.py
+# losses/multiclass.py
 class MultiClassCombinedLoss(nn.Module):
     def __init__(self, num_classes=3, dice_w=1.0, focal_w=1.0):
         self.dice_loss = MultiClassDiceLoss(num_classes, ignore_background=True)
@@ -407,7 +407,7 @@ class MultiClassCombinedLoss(nn.Module):
 
 #### Phase 3: Ultimate Combined Loss (Current)
 ```python
-# losses_combined.py (587 lines!)
+# losses/combined.py (587 lines!)
 class UltimateMultiTaskLoss(nn.Module):
     """
     5-component loss system:
@@ -483,9 +483,9 @@ class UltimateMultiTaskLoss(nn.Module):
 ```
 
 **New Loss Files**:
-- `src/braintumnet/losses_combined.py` (587 lines)
-- `src/braintumnet/losses_iou.py` (102 lines)
-- `src/braintumnet/losses_boundary.py` (158 lines)
+- `src/braintumnet/losses/combined.py` (587 lines)
+- `src/braintumnet/losses/iou.py` (102 lines)
+- `src/braintumnet/losses/boundary.py` (158 lines)
 
 ### 3.2 Class Weights for Imbalance
 
@@ -675,8 +675,8 @@ train_loader = DataLoader(
 #### Phase 1: Multi-Class Support
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/braintumnet/multiclass_metrics.py` | 280 | WT/TC/ED Dice computation |
-| `src/braintumnet/losses_multiclass.py` | 239 | Multi-class Dice + Focal |
+| `src/braintumnet/metrics/multiclass.py` | 280 | WT/TC/ED Dice computation |
+| `src/braintumnet/losses/multiclass.py` | 239 | Multi-class Dice + Focal |
 
 #### Phase 2: Architecture V2
 | File | Lines | Purpose |
@@ -687,9 +687,9 @@ train_loader = DataLoader(
 #### Phase 3: Ultimate Loss
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/braintumnet/losses_combined.py` | 587 | Ultimate combined loss system |
-| `src/braintumnet/losses_iou.py` | 102 | IoU loss component |
-| `src/braintumnet/losses_boundary.py` | 158 | Boundary loss component |
+| `src/braintumnet/losses/combined.py` | 587 | Ultimate combined loss system |
+| `src/braintumnet/losses/iou.py` | 102 | IoU loss component |
+| `src/braintumnet/losses/boundary.py` | 158 | Boundary loss component |
 
 **Total New Code**: ~1,854 lines
 

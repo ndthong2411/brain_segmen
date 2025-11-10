@@ -69,8 +69,8 @@ This report contains **12,073 lines** of detailed technical documentation divide
   - **Complete training loop walkthrough** (epoch → batch → forward → loss → backward → update)
   - **Line-by-line explanations**:
     - `trainer.py` (307 lines explained) - Training engine with fold validation
-    - `losses.py` (28 lines explained) - Dice Loss + BCE implementation
-    - `metrics.py` (248 lines explained) - IoU, Dice, HD95 computation
+    - `losses/base.py` (28 lines explained) - Dice Loss + BCE implementation
+    - `metrics/base.py` (248 lines explained) - IoU, Dice, HD95 computation
   - **Mixed Precision (AMP)**: How GradScaler works, 2× speedup on RTX 3090
   - **Learning rate scheduling**: Cosine warmup + ReduceLROnPlateau
   - **Checkpoint system**: Full training state saved (model, optimizer, scaler, fold number)
@@ -200,8 +200,8 @@ This report contains **12,073 lines** of detailed technical documentation divide
 Skip to the parts you need:
 - **Modify data augmentation**: [[02_DATA_PIPELINE]] → Section on `transforms.py` (lines 800-1100)
 - **Change model architecture**: [[03_MODEL_ARCHITECTURE]] → Modification guides for each file
-- **Add new loss function**: [[04_TRAINING_SYSTEM]] → Section on `losses.py` + [[10_EXTENSION_GUIDE]]
-- **Add new metrics**: [[04_TRAINING_SYSTEM]] → Section on `metrics.py` (lines 1200-1500)
+- **Add new loss function**: [[04_TRAINING_SYSTEM]] → Section on `losses/base.py` + [[10_EXTENSION_GUIDE]]
+- **Add new metrics**: [[04_TRAINING_SYSTEM]] → Section on `metrics/base.py` (lines 1200-1500)
 - **Debug training issues**: [[09_TROUBLESHOOTING]] → Common errors section
 
 ### For Researchers
@@ -297,8 +297,8 @@ src/braintumnet/utils/
 #### 6. Core Package (Metrics & Losses) - 2 files
 ```
 src/braintumnet/
-├── losses.py                 [28 lines]   - Dice Loss + BCE
-└── metrics.py                [248 lines]  - IoU, Dice, HD95
+├── losses/base.py                 [28 lines]   - Dice Loss + BCE
+└── metrics/base.py                [248 lines]  - IoU, Dice, HD95
 ```
 
 **Documentation coverage**: Complete explanations in [[04_TRAINING_SYSTEM]] (1,850 lines)

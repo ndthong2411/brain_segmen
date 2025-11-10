@@ -64,7 +64,7 @@ Configs are automatically merged in this priority:
 
 1. **base.yaml** - Common settings for all models
 2. **models/{model}.yaml** - Model-specific parameters
-3. **hardware_{hardware}.yaml** - Hardware optimizations (optional)
+3. **hardware/{hardware}.yaml** - Hardware optimizations (optional)
 
 ### Example: Swin-UNETR on A100
 
@@ -75,7 +75,7 @@ python scripts/train.py --model swin_unetr --cfg a100 --fold 0
 **What happens:**
 1. Loads `configs/base.yaml` (common settings)
 2. Merges `configs/models/swin_unetr.yaml` (model params)
-3. Merges `configs/hardware_a100.yaml` (A100 optimizations)
+3. Merges `configs/hardware/a100.yaml` (A100 optimizations)
 4. Sets batch_size=16, bfloat16, fused optimizer, etc.
 
 ### Hardware Configs
@@ -101,12 +101,17 @@ python scripts/train.py --model swin_unetr --cfg a100 --fold 0
 ```
 configs/
 ├── base.yaml                    # Common settings
-├── hardware_a100.yaml           # A100 optimizations
-└── models/
-    ├── swin_unetr.yaml         # Swin-UNETR params
-    ├── nnunet.yaml             # nnU-Net params
-    ├── unetr.yaml              # UNETR params
-    └── segunetv2.yaml          # SegUNetV2 params
+├── hardware/
+│   └── a100.yaml                # A100 optimizations
+├── models/
+│   ├── swin_unetr.yaml          # Swin-UNETR params
+│   ├── nnunet.yaml              # nnU-Net params
+│   ├── unetr.yaml               # UNETR params
+│   └── segunetv2.yaml           # SegUNetV2 params
+└── phases/
+    ├── phase1_optimized.yaml    # Phase 1 recipe
+    ├── phase2_small.yaml        # Phase 2 (3090)
+    └── phase2_a100.yaml         # Phase 2 (A100)
 ```
 
 **No need to specify config files manually!** Just use `--model` and `--cfg` flags.
@@ -286,7 +291,7 @@ ls braintumnet/data/lmdb_processed_multiclass_full/
 
 If not, convert from PNG:
 ```bash
-python scripts/convert_to_lmdb.py \
+python scripts/preprocessing/convert_to_lmdb.py \
     --input_dir braintumnet/data/processed_multiclass_full \
     --output_dir braintumnet/data/lmdb_processed_multiclass_full
 ```

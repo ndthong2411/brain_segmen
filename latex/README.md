@@ -181,9 +181,9 @@ All technical details are extracted directly from the code:
 - `masked_transformer.py`: Transformer bottleneck
 - `cbam.py`: Attention module
 - `t_inception.py`: Classification network
-- `losses_combined.py`: Ultimate loss function (425 lines)
-- `losses_multiclass.py`, `losses_iou.py`, `losses_boundary.py`: Individual loss components
-- `multiclass_metrics.py`: Evaluation metrics
+- `losses/combined.py`: Ultimate loss function (425 lines)
+- `losses/multiclass.py`, `losses/iou.py`, `losses/boundary.py`: Individual loss components
+- `metrics/multiclass.py`: Evaluation metrics
 - `phase2_a100.yaml`: Training configuration
 
 This ensures all formulas match the actual implementation.

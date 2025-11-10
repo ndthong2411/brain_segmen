@@ -15,7 +15,7 @@ Deep learning framework for **3-class brain tumor segmentation** using multi-mod
 pip install -r requirements.txt
 
 # 2. Preprocess data
-python scripts/preprocess_h5_to_multiclass.py \
+python scripts/preprocessing/preprocess_h5_to_multiclass.py \
     --h5_dir "path/to/h5/files" \
     --out_dir "data/processed_multiclass"
 
@@ -133,7 +133,7 @@ pip install -r requirements.txt
 ### Preprocessing
 
 ```bash
-python scripts/preprocess_h5_to_multiclass.py \
+python scripts/preprocessing/preprocess_h5_to_multiclass.py \
     --h5_dir "E:\data\brats2020" \
     --out_dir "data/processed_multiclass" \
     --img_size 256 \
@@ -148,7 +148,7 @@ python scripts/preprocess_h5_to_multiclass.py \
 **Optional: LMDB Backend (10-15x faster)**
 
 ```bash
-python scripts/convert_to_lmdb.py \
+python scripts/preprocessing/convert_to_lmdb.py \
     --data_dir "data/processed_multiclass" \
     --lmdb_dir "data/lmdb"
 ```
@@ -167,15 +167,22 @@ data:
 ### Simple Config Hierarchy
 
 ```
-base.yaml              # Common settings (data, training, loss)
+base.yaml                      # Common settings (data, training, loss)
+├── hardware/
+│   └── a100.yaml              # A100 optimizations
 ├── models/
-│   ├── segunetv2.yaml      # Baseline config
-│   ├── swin_unetr.yaml     # Swin-UNETR config
-│   ├── nnunet.yaml         # nnU-Net config
-│   ├── unetr.yaml          # UNETR config
-│   ├── transunet.yaml      # TransUNet config
-│   └── lg_unetr.yaml       # LG-UNETR config
-└── hardware_a100.yaml      # A100 optimizations
+│   ├── segunetv2.yaml         # Baseline config
+│   ├── swin_unetr.yaml        # Swin-UNETR config
+│   ├── nnunet.yaml            # nnU-Net config
+│   ├── unetr.yaml             # UNETR config
+│   ├── transunet.yaml         # TransUNet config
+│   └── lg_unetr.yaml          # LG-UNETR config
+└── phases/
+    ├── phase1_optimized.yaml  # Legacy Phase 1 recipe
+    ├── phase2_small.yaml      # Phase 2 small (RTX 3090)
+    ├── phase2_full.yaml       # Phase 2 full (multi-GPU)
+    ├── phase2_a100.yaml       # Phase 2 tuned for A100
+    └── phase2_a100_lmdb.yaml  # Phase 2 + LMDB (A100)
 ```
 
 ### Config Merging
@@ -183,7 +190,7 @@ base.yaml              # Common settings (data, training, loss)
 Configs are automatically merged:
 1. **base.yaml** - Base settings
 2. **models/{model}.yaml** - Model-specific overrides
-3. **hardware_a100.yaml** - Hardware-specific optimizations (optional)
+3. **hardware/a100.yaml** - Hardware-specific optimizations (optional)
 
 ### Example: Customize Batch Size
 
@@ -341,36 +348,49 @@ python scripts/train.py --model swin_unetr --fold 0
 braintumnet/
 ├── configs/
 │   ├── base.yaml                   # Base configuration
-│   ├── hardware_a100.yaml          # A100 optimizations
-│   └── models/
-│       ├── segunetv2.yaml          # Baseline config
-│       ├── swin_unetr.yaml         # Swin-UNETR config
-│       ├── nnunet.yaml             # nnU-Net config
-│       ├── unetr.yaml              # UNETR config
-│       ├── transunet.yaml          # TransUNet config
-│       └── lg_unetr.yaml           # LG-UNETR config
+│   ├── hardware/
+│   │   └── a100.yaml               # A100 optimizations
+│   ├── models/
+│   │   ├── segunetv2.yaml          # Baseline config
+│   │   ├── swin_unetr.yaml         # Swin-UNETR config
+│   │   ├── nnunet.yaml             # nnU-Net config
+│   │   ├── unetr.yaml              # UNETR config
+│   │   ├── transunet.yaml          # TransUNet config
+│   │   └── lg_unetr.yaml           # LG-UNETR config
+│   └── phases/
+│       ├── phase1_optimized.yaml   # Legacy phase 1 recipe
+│       ├── phase2_small.yaml       # Phase 2 small (RTX 3090)
+│       ├── phase2_full.yaml        # Phase 2 full (multi-GPU)
+│       ├── phase2_a100.yaml        # Phase 2 tuned for A100
+│       └── phase2_a100_lmdb.yaml   # Phase 2 + LMDB (A100)
 │
 ├── src/braintumnet/
 │   ├── models/
 │   │   ├── __init__.py             # Model factory
 │   │   ├── braintumnet_v2.py       # SegUNetV2 baseline
+│   │   ├── legacy/                 # Archived v1 models
 │   │   ├── swin_unetr_wrapper.py   # Swin-UNETR (MONAI)
 │   │   ├── nnunet_wrapper.py       # nnU-Net implementation
 │   │   ├── unetr_wrapper.py        # UNETR (MONAI)
 │   │   ├── transunet_wrapper.py    # TransUNet implementation
 │   │   └── lg_unetr_wrapper.py     # LG-UNETR implementation
 │   ├── engine/trainer.py           # Training loop
-│   ├── losses.py                   # Loss functions
-│   ├── multiclass_metrics.py       # Metrics
+│   ├── losses/                     # Loss packages (dice, focal, iou, etc.)
+│   ├── metrics/                    # Metrics packages (base + multiclass)
 │   └── data/
 │       ├── dataset.py              # Dataset classes
 │       └── lmdb_dataset.py         # LMDB backend
 │
 ├── scripts/
 │   ├── train.py                    # Main training script
-│   ├── preprocess_h5_to_multiclass.py
-│   ├── convert_to_lmdb.py          # LMDB conversion
-│   ├── test_models.py              # Test models
+│   ├── evaluate.py / predict.py    # Eval + inference
+│   ├── preprocessing/              # Data preprocessing utilities
+│   │   ├── preprocess_h5_to_multiclass.py
+│   │   ├── preprocess_nifti_to_multiclass.py
+│   │   ├── convert_to_lmdb.py
+│   │   └── convert_h5_to_dicom.py
+│   └── benchmarks/
+│       └── benchmark_dataloader.py
 │   ├── test_config_system.py       # Test configs
 │   └── test_training_pipeline.py   # Integration test
 │

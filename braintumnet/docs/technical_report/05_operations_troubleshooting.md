@@ -58,7 +58,7 @@ Tài liệu này tập trung vào những vấn đề “đời thường” khi
 1. **Check config merge:** in `cfg` ở `train.py` (đã làm sẵn) để chắc chắn giá trị như mong muốn.
 2. **Kiểm tra sample batch:** trong notebook, load `next(iter(train_loader))`, kiểm tra shape `(batch, 4, 256, 256)` và mask `(batch, 1, 256, 256)`.
 3. **Gradient check:** nếu loss đứng yên, bật `torch.autograd.set_detect_anomaly(True)` tạm thời để phát hiện ops bất thường (chỉ khi debug).
-4. **Profiling DataLoader:** chạy `scripts/benchmark_dataloader.py` để biết bottleneck I/O.
+4. **Profiling DataLoader:** chạy `scripts/benchmarks/benchmark_dataloader.py` để biết bottleneck I/O.
 5. **Hạn chế bug merge:** sau mỗi chỉnh sửa lớn, chạy `python -m compileall` như ở trên để bảo đảm không lỗi cú pháp.
 
 ---

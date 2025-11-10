@@ -11,7 +11,7 @@
 ### Phase 1: Loss Functions (COMPLETE)
 
 ####  1. IoU Loss Module ✅
-**File**: `src/braintumnet/losses_iou.py`
+**File**: `src/braintumnet/losses/iou.py`
 
 **Implemented Classes**:
 - `MulticlassIoULoss` - Direct IoU optimization
@@ -31,7 +31,7 @@
 ---
 
 #### 2. Boundary Loss Module ✅
-**File**: `src/braintumnet/losses_boundary.py`
+**File**: `src/braintumnet/losses/boundary.py`
 
 **Implemented Classes**:
 - `BoundaryLoss` - SDF-based boundary weighting
@@ -50,7 +50,7 @@
 ---
 
 #### 3. Ultimate Combined Loss ✅
-**File**: `src/braintumnet/losses_combined.py`
+**File**: `src/braintumnet/losses/combined.py`
 
 **Implemented Classes**:
 - `UltimateLoss` - Dice + Focal + IoU + Boundary
@@ -134,9 +134,9 @@ Tracks implementation progress:
 ### Step 1: Verify New Files ✅
 ```bash
 # Check that all new files exist
-ls src/braintumnet/losses_iou.py
-ls src/braintumnet/losses_boundary.py
-ls src/braintumnet/losses_combined.py
+ls src/braintumnet/losses/iou.py
+ls src/braintumnet/losses/boundary.py
+ls src/braintumnet/losses/combined.py
 ls configs/phase1_iou_focus.yaml
 ```
 
@@ -144,13 +144,13 @@ ls configs/phase1_iou_focus.yaml
 ```bash
 # Test IoU loss
 cd src/braintumnet
-python losses_iou.py
+python losses/iou.py
 
 # Test Boundary loss
-python losses_boundary.py
+python losses/boundary.py
 
 # Test Combined loss
-python losses_combined.py
+python losses/combined.py
 
 # All should output: "All tests passed! ✓"
 ```
@@ -530,9 +530,9 @@ pip install scipy
 ### New Files Created ✅
 ```
 src/braintumnet/
-├── losses_iou.py              # IoU loss (305 lines)
-├── losses_boundary.py         # Boundary loss (352 lines)
-└── losses_combined.py         # Ultimate loss (445 lines)
+├── losses/iou.py              # IoU loss (305 lines)
+├── losses/boundary.py         # Boundary loss (352 lines)
+└── losses/combined.py         # Ultimate loss (445 lines)
 
 configs/
 └── phase1_iou_focus.yaml      # Phase 1 config (176 lines)
@@ -594,7 +594,7 @@ src/braintumnet/models/
 
 If you encounter issues:
 
-1. Check unit tests pass: `python losses_iou.py`
+1. Check unit tests pass: `python losses/iou.py`
 2. Check trainer modified correctly
 3. Check config file syntax (YAML indentation)
 4. Monitor first 10 epochs carefully

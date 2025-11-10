@@ -36,7 +36,7 @@ Model đang output 3 channels (logits for bg, tc, ed) nhưng validation áp dụ
 
 ## Solution
 
-### 1. Created `multiclass_metrics.py`
+### 1. Created `metrics/multiclass.py`
 
 **MulticlassMetricsAccumulator**:
 - Accumulates **intersection** and **union** for each region across batches
@@ -331,7 +331,7 @@ Expected output:
 **Vấn đề**: Validation metrics thấp (2.9%) vì dùng binary sigmoid trên multiclass output (3 channels)
 
 **Giải pháp**:
-1. Created `multiclass_metrics.py` with proper softmax + argmax
+1. Created `metrics/multiclass.py` with proper softmax + argmax
 2. Updated `trainer.py` validation loop to use multiclass accumulator
 3. Added WT, TC, ED region metrics to logging and TensorBoard
 4. Updated visualization to RGB (Red=TC, Green=ED)

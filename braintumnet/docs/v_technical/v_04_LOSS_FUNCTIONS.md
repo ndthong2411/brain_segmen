@@ -47,12 +47,12 @@ Focal Loss:
 
 ```
 src/braintumnet/
-├── losses_multiclass.py        # Multi-class loss functions
+├── losses/multiclass.py        # Multi-class loss functions
 │   ├── MultiClassDiceLoss
 │   ├── MultiClassFocalLoss
 │   └── MultiClassCombinedLoss
 │
-└── multiclass_metrics.py       # BraTS metrics
+└── metrics/multiclass.py       # BraTS metrics
     ├── compute_dice_score
     ├── compute_hausdorff_distance
     └── MulticlassMetricsAccumulator
@@ -64,7 +64,7 @@ src/braintumnet/
 
 ### File Code
 
-**File**: `src/braintumnet/losses_multiclass.py` (133 dòng)
+**File**: `src/braintumnet/losses/multiclass.py` (133 dòng)
 
 ### Dice Coefficient
 
@@ -624,7 +624,7 @@ total_loss, loss_dict = compute_deep_supervision_loss(
 
 ### File Code
 
-**File**: `src/braintumnet/multiclass_metrics.py` (215 dòng)
+**File**: `src/braintumnet/metrics/multiclass.py` (215 dòng)
 
 ### Dice Score
 

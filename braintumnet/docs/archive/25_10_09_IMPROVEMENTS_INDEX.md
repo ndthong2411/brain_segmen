@@ -102,7 +102,7 @@ src/braintumnet/models/
 ├── braintumnet.py       [MODIFIED] +handle aux outputs
 
 src/braintumnet/
-├── losses.py            [MODIFIED] +BoundaryLoss class
+├── losses/base.py            [MODIFIED] +BoundaryLoss class
 
 src/braintumnet/engine/
 ├── trainer.py           [MODIFIED] +aux loss computation

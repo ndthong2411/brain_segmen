@@ -6,7 +6,7 @@ Tài liệu này đưa bạn qua các bước kiểm tra chất lượng mô hì
 
 ## 1. Metrics chính
 
-- **Dice & IoU**: tính cho 3 vùng BraTS (WT, TC, ED) trong `braintumnet/src/braintumnet/multiclass_metrics.py`.
+- **Dice & IoU**: tính cho 3 vùng BraTS (WT, TC, ED) trong `braintumnet/src/braintumnet/metrics/multiclass.py`.
 - **Mean Dice/IoU**: trung bình ba vùng, dùng để xếp hạng checkpoint.
 - **ClsAcc**: accuracy phân loại HGG/LGG (chỉ có khi model trả logits classification).
 - **Logging**: trong mỗi epoch, trainer in `WT_dice`, `TC_dice`, `ED_dice`, `val_iou`, `val_dice`, `val_acc`.

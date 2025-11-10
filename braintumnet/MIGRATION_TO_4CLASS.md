@@ -28,12 +28,12 @@ Your codebase has been **upgraded from 3-class to 4-class** standard BraTS segme
 
 ## Files Modified
 
-### 1. **Preprocessing** (`scripts/preprocess_nifti_to_multiclass.py`)
+### 1. **Preprocessing** (`scripts/preprocessing/preprocess_nifti_to_multiclass.py`)
 - ✅ Added `convert_brats_seg_to_4class()` function
 - ✅ Mapping: BraTS label 4 (ET) → class 3
 - ✅ Updated class_mapping.json to 4 classes
 
-### 2. **Metrics** (`src/braintumnet/multiclass_metrics.py`)
+### 2. **Metrics** (`src/braintumnet/metrics/multiclass.py`)
 - ✅ Added ET metrics computation
 - ✅ Updated TC definition: classes 1 + 3 (instead of class 1 only)
 - ✅ Updated WT definition: classes 1 + 2 + 3
@@ -60,7 +60,7 @@ You **MUST** re-run preprocessing to generate 4-class masks:
 
 ```bash
 cd braintumnet
-python scripts/preprocess_nifti_to_multiclass.py \
+python scripts/preprocessing/preprocess_nifti_to_multiclass.py \
     --data_root data/raw/BraTS2020_TrainingData/MICCAI_BraTS2020_TrainingData \
     --out_dir data/processed_multiclass_4class \
     --img_size 256 \
@@ -233,7 +233,7 @@ To verify correct implementation:
 ## Questions?
 
 - Check `test_4class_brats.py` for examples
-- Review `multiclass_metrics.py` for region definitions
+- Review `metrics/multiclass.py` for region definitions
 - See `preprocess_nifti_to_multiclass.py` for label mapping
 
 **Important**: This migration is **one-way** - you cannot use 4-class data with 3-class models, and vice versa.

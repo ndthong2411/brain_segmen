@@ -9,9 +9,9 @@
 ## ✅ What's Been Implemented
 
 ### 3 New Loss Modules (1,102 lines)
-- `src/braintumnet/losses_iou.py` - IoU loss (+3-5% expected)
-- `src/braintumnet/losses_boundary.py` - Boundary loss (+2-4% expected)
-- `src/braintumnet/losses_combined.py` - Ultimate combined loss
+- `src/braintumnet/losses/iou.py` - IoU loss (+3-5% expected)
+- `src/braintumnet/losses/boundary.py` - Boundary loss (+2-4% expected)
+- `src/braintumnet/losses/combined.py` - Ultimate combined loss
 
 ### 1 Configuration File
 - `configs/phase1_iou_focus.yaml` - Optimized config
@@ -32,13 +32,13 @@
 cd E:\thong\code\brain_segmen\braintumnet\src\braintumnet
 
 # Test each module
-python losses_iou.py
+python losses/iou.py
 # Expected: "All tests passed! ✓"
 
-python losses_boundary.py
+python losses/boundary.py
 # Expected: "All tests passed! ✓"
 
-python losses_combined.py
+python losses/combined.py
 # Expected: "All tests passed! ✓"
 ```
 
@@ -143,9 +143,9 @@ boundary_weight: 0.3  # reduce from 0.5
 
 ### New Code
 ```
-src/braintumnet/losses_iou.py
-src/braintumnet/losses_boundary.py
-src/braintumnet/losses_combined.py
+src/braintumnet/losses/iou.py
+src/braintumnet/losses/boundary.py
+src/braintumnet/losses/combined.py
 ```
 
 ### Config

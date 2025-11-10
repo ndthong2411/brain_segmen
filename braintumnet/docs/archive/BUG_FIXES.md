@@ -77,7 +77,7 @@ Epoch 9: IoU=0.5938, Dice=0.7449  ✅ CORRECT
 ```
 
 **Files Modified:**
-- `src/braintumnet/metrics.py` - Added `compute_intersection_union()`
+- `src/braintumnet/metrics/base.py` - Added `compute_intersection_union()`
 - `src/braintumnet/engine/trainer.py` - Fixed validation loop
 - `src/braintumnet/engine/evaluator.py` - Fixed evaluation metrics
 
@@ -144,7 +144,7 @@ else:
 - Tensor conversion handles normalization correctly
 
 ### **Loss Functions** ✅
-- `src/braintumnet/losses.py` - All correct
+- `src/braintumnet/losses/base.py` - All correct
 - Dice loss implementation is mathematically sound
 - BCE loss combined properly
 - Multi-task loss weighting works correctly

@@ -154,7 +154,7 @@ Có thể `loss` ở đây:
 
 ### Khả năng 2: Loss Dict Bị Sai ⚠️
 
-Trong `losses_combined.py`:
+Trong `losses/combined.py`:
 
 ```python
 loss_dict = {
@@ -293,7 +293,7 @@ if loss_type in ["ultimate", "ultimate_multitask"] and 'loss_dict' in locals():
 
 ### Fix 2: Add Debug Warnings
 
-Đã thêm vào `losses_combined.py`:
+Đã thêm vào `losses/combined.py`:
 
 ```python
 if dice_l < 0 or focal_l < 0 or iou_l < 0 or boundary_l < 0:

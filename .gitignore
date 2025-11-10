@@ -4,6 +4,8 @@ braintumnet/data
 braintumnet/checkpoints
 old/
 logs/
+/archive/
+/trash/
 runs/
 checkpoints/
 # Byte-compiled / optimized / DLL files

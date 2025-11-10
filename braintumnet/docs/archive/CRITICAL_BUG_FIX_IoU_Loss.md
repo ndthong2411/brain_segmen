@@ -21,7 +21,7 @@ Training log showed:
 
 ### The Bug
 
-In `src/braintumnet/losses_iou.py`, line 87-94 (old code):
+In `src/braintumnet/losses/iou.py`, line 87-94 (old code):
 
 ```python
 # ❌ WRONG: Weighting IoU before computing loss
@@ -261,7 +261,7 @@ def forward(self, logits, target):
 
 ### 2. Monitor Loss Components
 
-Already added in `losses_combined.py`:
+Already added in `losses/combined.py`:
 ```python
 if dice_l < 0 or focal_l < 0 or iou_l < 0 or boundary_l < 0:
     print(f"⚠️  WARNING: Negative loss component detected!")
@@ -281,7 +281,7 @@ For any custom loss:
 - [x] Bug identified
 - [x] Root cause found
 - [x] Fix implemented
-- [x] Code updated in `losses_iou.py`
+- [x] Code updated in `losses/iou.py`
 - [x] Similar issues checked (Dice Loss OK)
 - [x] Documentation created
 - [ ] Training restarted with fix
@@ -289,10 +289,10 @@ For any custom loss:
 
 ## 📚 References
 
-- File: `src/braintumnet/losses_iou.py`
+- File: `src/braintumnet/losses/iou.py`
 - Lines changed: 72-96
-- Related: `losses_multiclass.py` (Dice Loss - was already correct)
-- Debug tool: `losses_combined.py` (negative loss detection)
+- Related: `losses/multiclass.py` (Dice Loss - was already correct)
+- Debug tool: `losses/combined.py` (negative loss detection)
 
 ---
 

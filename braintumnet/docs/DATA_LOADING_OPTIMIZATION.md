@@ -18,7 +18,7 @@ Nguyên nhân: PNG file I/O quá chậm (5 files/sample × 57K samples)
 Tối ưu config hiện tại:
 
 ```yaml
-# configs/phase2_a100.yaml
+# configs/phases/phase2_a100.yaml
 train:
   workers: 16                # Tăng từ 8 → 16
   prefetch_factor: 8         # Tăng từ 4 → 8
@@ -34,7 +34,7 @@ train:
 Dataset tự động cache hot slices trong RAM:
 
 ```yaml
-# configs/phase2_a100.yaml
+# configs/phases/phase2_a100.yaml
 data:
   cache_size: 1000          # Cache 1000 slices (default)
 ```
@@ -60,7 +60,7 @@ pip install lmdb
 ```bash
 cd braintumnet
 
-python scripts/convert_to_lmdb.py \
+python scripts/preprocessing/convert_to_lmdb.py \
     --input_dir data/processed_multiclass_with_grades \
     --output_dir data/lmdb_multiclass_with_grades \
     --map_size 50 \
@@ -74,7 +74,7 @@ python scripts/convert_to_lmdb.py \
 
 ```bash
 python scripts/train.py \
-    --cfg configs/phase2_a100_lmdb.yaml \
+    --cfg configs/phases/phase2_a100_lmdb.yaml \
     --fold 0
 ```
 
@@ -101,7 +101,7 @@ So sánh performance giữa các backends:
 
 ```bash
 # Benchmark PNG
-python scripts/benchmark_dataloader.py \
+python scripts/benchmarks/benchmark_dataloader.py \
     --backend png \
     --data_dir braintumnet/data/processed_multiclass_with_grades \
     --batch_size 16 \
@@ -109,7 +109,7 @@ python scripts/benchmark_dataloader.py \
     --num_batches 100
 
 # Benchmark LMDB
-python scripts/benchmark_dataloader.py \
+python scripts/benchmarks/benchmark_dataloader.py \
     --backend lmdb \
     --data_dir braintumnet/data/lmdb_multiclass_with_grades \
     --batch_size 16 \
@@ -152,7 +152,7 @@ pip install lmdb
 Tăng `--map_size`:
 
 ```bash
-python scripts/convert_to_lmdb.py \
+python scripts/preprocessing/convert_to_lmdb.py \
     --input_dir ... \
     --output_dir ... \
     --map_size 100  # Tăng từ 50 → 100 GB

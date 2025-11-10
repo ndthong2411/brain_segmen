@@ -6,7 +6,7 @@
 
 ---
 
-## 1. Multiclass Metrics (`multiclass_metrics.py`) ✅
+## 1. Multiclass Metrics (`metrics/multiclass.py`) ✅
 
 ### ✅ Fixed Issues:
 - **FIXED**: `visualize_multiclass_prediction()` signature mismatch
@@ -191,7 +191,7 @@ if num_classes_seg > 1:
 
 ---
 
-## 3. Loss Functions (`losses.py`) ✅
+## 3. Loss Functions (`losses/base.py`) ✅
 
 ### ✅ Verified All Multiclass Losses:
 
@@ -344,13 +344,13 @@ Epoch 1/250 [Train]: loss=2.1414 → 1.8128 → 1.6762  # ✅ Loss decreasing
 
 | Component | Issue | Status |
 |-----------|-------|--------|
-| `multiclass_metrics.py` | Function signature mismatch | ✅ FIXED |
+| `metrics/multiclass.py` | Function signature mismatch | ✅ FIXED |
 | `trainer.py` validation | Used binary sigmoid metrics | ✅ FIXED |
 | `trainer.py` visualization | Used binary threshold `> 0.5` | ✅ FIXED |
 | `trainer.py` logging | Only logged binary IoU/Dice | ✅ FIXED |
 | `trainer.py` console | Didn't show WT/TC/ED metrics | ✅ FIXED |
 | `trainer.py` TensorBoard | Missing region metrics | ✅ FIXED |
-| `losses.py` | Missing multiclass losses | ✅ ALREADY ADDED |
+| `losses/base.py` | Missing multiclass losses | ✅ ALREADY ADDED |
 | `dataset.py` | Mask handling | ✅ ALREADY CORRECT |
 | `multiclass.yaml` | Config settings | ✅ ALREADY CORRECT |
 
@@ -405,7 +405,7 @@ epoch,train_loss,val_iou,val_dice,val_acc,WT_dice,WT_iou,TC_dice,TC_iou,ED_dice,
 
 ## 10. Files Modified
 
-1. ✅ **Created**: `src/braintumnet/multiclass_metrics.py` (343 lines)
+1. ✅ **Created**: `src/braintumnet/metrics/multiclass.py` (343 lines)
 2. ✅ **Modified**: `src/braintumnet/engine/trainer.py`
    - Lines 13: Added imports
    - Lines 296-306: Initialize multiclass accumulator

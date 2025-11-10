@@ -16,7 +16,7 @@ Mục tiêu: hiểu và kiểm tra nhanh toàn bộ luồng dữ liệu của Br
 
 ## 2. Bước 1 – Chuyển NIfTI → PNG đa lớp
 
-- Script: `python braintumnet/scripts/preprocess_nifti_to_multiclass.py`
+- Script: `python braintumnet/scripts/preprocessing/preprocess_nifti_to_multiclass.py`
 - Đầu ra: `processed_multiclass` gồm 5 thư mục (`flair/`, `t1/`, `t1ce/`, `t2/`, `seg/`) + CSV cho các fold.
 - Các tham số chính:
   - `--img_size`: resize + pad ảnh vuông (mặc định 256).
@@ -33,7 +33,7 @@ Mục tiêu: hiểu và kiểm tra nhanh toàn bộ luồng dữ liệu của Br
 
 ## 3. Bước 2 – Chuyển PNG → LMDB (tăng tốc I/O)
 
-- Script: `python braintumnet/scripts/convert_to_lmdb.py`
+- Script: `python braintumnet/scripts/preprocessing/convert_to_lmdb.py`
 - Output: thư mục LMDB gồm `data.mdb`, `lock.mdb`, `meta.json`, `*.csv` copy từ processed.
 - Ưu điểm:
   - Giảm overhead đọc file rời khi huấn luyện (đặc biệt trên A100).
@@ -63,7 +63,7 @@ Mục tiêu: hiểu và kiểm tra nhanh toàn bộ luồng dữ liệu của Br
 Những công cụ có sẵn:
 
 - `notebooks/dataset_eda.ipynb`: thống kê phân phối lát cắt, tỷ lệ lớp.
-- `scripts/benchmark_dataloader.py`: đo tốc độ DataLoader với nhiều worker/batch size.
+- `scripts/benchmarks/benchmark_dataloader.py`: đo tốc độ DataLoader với nhiều worker/batch size.
 - Notebook `brain_seg.ipynb`:
   - Cell “Class Distribution Snapshot”: quét 500 lát để thấy tỷ lệ pixel 0/1/2.
   - Cell visualization: hiển thị 4 modality + mask để kiểm tra alignment.

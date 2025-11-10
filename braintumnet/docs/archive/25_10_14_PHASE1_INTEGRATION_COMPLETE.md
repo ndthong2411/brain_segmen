@@ -10,20 +10,20 @@
 
 ### 1. Loss Modules Implemented
 
-#### [src/braintumnet/losses_iou.py](../src/braintumnet/losses_iou.py) (305 lines)
+#### [src/braintumnet/losses/iou.py](../src/braintumnet/losses/iou.py) (305 lines)
 - `MulticlassIoULoss`: Direct IoU optimization
 - `TverskyLoss`: Generalized Dice with FP/FN control
 - `FocalTverskyLoss`: Hard example focus on Tversky
 - `ComboIoULoss`: IoU + Dice combined
 - **Expected gain**: +3-5% IoU
 
-#### [src/braintumnet/losses_boundary.py](../src/braintumnet/losses_boundary.py) (352 lines)
+#### [src/braintumnet/losses/boundary.py](../src/braintumnet/losses/boundary.py) (352 lines)
 - `BoundaryLoss`: SDF-based boundary weighting
 - `HausdorffLoss`: Maximum boundary distance penalty
 - `CombinedBoundaryLoss`: Multi-component boundary optimization
 - **Expected gain**: +2-4% IoU
 
-#### [src/braintumnet/losses_combined.py](../src/braintumnet/losses_combined.py) (445 lines)
+#### [src/braintumnet/losses/combined.py](../src/braintumnet/losses/combined.py) (445 lines)
 - `UltimateLoss`: Dice + Focal + IoU + Boundary
 - `UltimateMultiTaskLoss`: Adds classification + deep supervision
 - `create_loss_from_config()`: Factory function for config-based creation
@@ -293,9 +293,9 @@ train:
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| IoU Loss | ✅ Complete | [src/braintumnet/losses_iou.py](../src/braintumnet/losses_iou.py) |
-| Boundary Loss | ✅ Complete | [src/braintumnet/losses_boundary.py](../src/braintumnet/losses_boundary.py) |
-| Combined Loss | ✅ Complete | [src/braintumnet/losses_combined.py](../src/braintumnet/losses_combined.py) |
+| IoU Loss | ✅ Complete | [src/braintumnet/losses/iou.py](../src/braintumnet/losses/iou.py) |
+| Boundary Loss | ✅ Complete | [src/braintumnet/losses/boundary.py](../src/braintumnet/losses/boundary.py) |
+| Combined Loss | ✅ Complete | [src/braintumnet/losses/combined.py](../src/braintumnet/losses/combined.py) |
 | Trainer Integration | ✅ Complete | [src/braintumnet/engine/trainer.py](../src/braintumnet/engine/trainer.py) |
 | Phase 1 Config | ✅ Complete | [configs/phase1_iou_focus.yaml](../configs/phase1_iou_focus.yaml) |
 | Documentation | ✅ Complete | docs/25_01_14_*.md |

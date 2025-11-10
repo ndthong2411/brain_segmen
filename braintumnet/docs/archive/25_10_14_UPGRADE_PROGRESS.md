@@ -27,7 +27,7 @@
 - [ ] Integrate into training loop
 - [ ] Validate gradient flow
 
-**File**: `src/braintumnet/losses_iou.py`
+**File**: `src/braintumnet/losses/iou.py`
 **Expected Gain**: +3-5% IoU
 
 #### 1.2 Boundary Loss ⏳
@@ -36,7 +36,7 @@
 - [ ] Test on sample data
 - [ ] Integrate with main loss
 
-**File**: `src/braintumnet/losses_boundary.py`
+**File**: `src/braintumnet/losses/boundary.py`
 **Expected Gain**: +2-4% IoU
 
 #### 1.3 Combined Loss ⏳
@@ -130,9 +130,9 @@
 ## 📂 New Files Created
 
 ### Loss Functions
-- [ ] `src/braintumnet/losses_iou.py` - IoU loss implementation
-- [ ] `src/braintumnet/losses_boundary.py` - Boundary loss implementation
-- [ ] `src/braintumnet/losses_combined.py` - Ultimate combined loss
+- [ ] `src/braintumnet/losses/iou.py` - IoU loss implementation
+- [ ] `src/braintumnet/losses/boundary.py` - Boundary loss implementation
+- [ ] `src/braintumnet/losses/combined.py` - Ultimate combined loss
 
 ### Model Improvements
 - [ ] `src/braintumnet/models/seg_unet_v2.py` - Improved U-Net with residuals

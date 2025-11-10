@@ -6,11 +6,8 @@ Applies 8 augmentations and averages predictions for improved accuracy.
 Expected gain: +2-3% IoU (NO retraining needed!)
 
 Usage:
-    python scripts/tta_inference.py --checkpoint checkpoints/braintumnet_best_fold0.pth \
-                                     --config configs/phase2_small.yaml \
-                                     --data_root data/processed_multiclass \
-                                     --fold 0 \
-                                     --output results/tta_fold0.csv
+    python braintumnet/scripts/tta_inference.py checkpoints/braintumnet_best_fold0.pth
+    python braintumnet/scripts/tta_inference.py checkpoints/braintumnet_best_fold4.pth
 
 Author: BrainTumNet Phase 3
 Date: 2025-10-14
@@ -135,21 +132,44 @@ def compute_iou(pred, target, num_classes=3, ignore_background=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='TTA Inference')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to model checkpoint')
-    parser.add_argument('--config', type=str, required=True, help='Path to config file')
-    parser.add_argument('--data_root', type=str, default='data/processed_multiclass', help='Data root directory')
-    parser.add_argument('--fold', type=int, default=0, help='Fold number for validation')
-    parser.add_argument('--output', type=str, default='results/tta_results.csv', help='Output CSV file')
-    parser.add_argument('--batch_size', type=int, default=1, help='Batch size (keep 1 for TTA)')
+    parser = argparse.ArgumentParser(
+        description='TTA Inference - just pass checkpoint path',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python braintumnet/scripts/tta_inference.py checkpoints/braintumnet_best_fold0.pth
+  python braintumnet/scripts/tta_inference.py checkpoints/braintumnet_best_fold4.pth
+        """
+    )
+    parser.add_argument('checkpoint', type=str, help='Path to model checkpoint')
+    parser.add_argument('--output', type=str, default=None, help='Output CSV file (default: results/tta_fold{N}.csv)')
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')
 
     args = parser.parse_args()
 
-    # Load config
-    print(f"Loading config from: {args.config}")
-    with open(args.config, 'r') as f:
+    # Extract fold number from checkpoint path
+    import re
+    match = re.search(r'fold(\d+)', args.checkpoint)
+    fold = int(match.group(1)) if match else 0
+
+    # Set default output path if not specified
+    if args.output is None:
+        args.output = f'results/tta_fold{fold}.csv'
+
+    print(f"\nDetected fold: {fold}")
+
+    # Load base config
+    ROOT = Path(__file__).resolve().parents[1]
+    cfg_path = ROOT / "configs" / "base.yaml"
+    print(f"Loading config from: {cfg_path}")
+    with open(cfg_path, 'r') as f:
         cfg = yaml.safe_load(f)
+
+    # Override fold
+    cfg['data']['fold'] = fold
+
+    # Get data_root from config
+    data_root = cfg['data']['proc_root']
 
     # Create output directory
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -199,11 +219,11 @@ def main():
     print(f"Model loaded successfully ({model_type.upper()})")
 
     # Load validation dataset
-    split_file = os.path.join(args.data_root, f'val_fold{args.fold}.csv')
+    split_file = os.path.join(data_root, f'val_fold{fold}.csv')
     print(f"Loading validation data from: {split_file}")
 
     dataset = SliceDataset(
-        proc_root=args.data_root,
+        proc_root=data_root,
         split_file=split_file,
         img_size=cfg['data']['img_size'],
         train=False,

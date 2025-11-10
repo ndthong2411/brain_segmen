@@ -386,7 +386,7 @@ if self.deep_supervision:
 ### 7. **Advanced Loss Function**
 
 ```python
-# From losses_multiclass.py (inferred)
+# From losses/multiclass.py (inferred)
 loss = dice_loss + focal_loss
 
 # Dice Loss: Optimize overlap (Dice coefficient)

@@ -22,7 +22,7 @@ All bugs have been identified and fixed. The Phase 1 implementation is now fully
 **Error**:
 ```
 RuntimeError: indices should be either on cpu or on the same device as the indexed tensor (cpu)
-  File losses_multiclass.py", line 132: alpha_t = self.alpha[target_flat]
+  File losses/multiclass.py", line 132: alpha_t = self.alpha[target_flat]
 ```
 
 **Root Cause**:
@@ -30,7 +30,7 @@ RuntimeError: indices should be either on cpu or on the same device as the index
 - `target_flat` on GPU during training
 - Indexing CPU tensor with GPU indices causes device mismatch
 
-**Fix** (losses_multiclass.py:132):
+**Fix** (losses/multiclass.py:132):
 ```python
 # Before
 alpha_t = self.alpha[target_flat]
@@ -39,7 +39,7 @@ alpha_t = self.alpha[target_flat]
 alpha_t = self.alpha.to(target_flat.device)[target_flat]
 ```
 
-**Also Fixed** (losses_multiclass.py:123):
+**Also Fixed** (losses/multiclass.py:123):
 ```python
 # Before
 pt = probs_flat[torch.arange(len(target_flat)), target_flat]
@@ -54,7 +54,7 @@ pt = probs_flat[torch.arange(len(target_flat), device=target_flat.device), targe
 
 **Error**: Same as Bug 1, but in Dice loss class_weights
 
-**Fix** (losses_multiclass.py:76):
+**Fix** (losses/multiclass.py:76):
 ```python
 # Before
 weighted_loss = dice_loss * self.class_weights[c]
@@ -70,7 +70,7 @@ weighted_loss = dice_loss * class_weight
 
 **Error**: Same as Bug 1, but in IoU loss class_weights
 
-**Fix** (losses_iou.py:86):
+**Fix** (losses/iou.py:86):
 ```python
 # Before
 weighted_iou = iou * self.class_weights[c]
@@ -88,7 +88,7 @@ weighted_iou = iou * class_weight
 ```
 ValueError: Input and output must have the same number of spatial dimensions,
 but got input with spatial dimensions of [1, 256, 256] and output size of (64, 64)
-  File losses_combined.py", line 188: target_resized = F.interpolate(...)
+  File losses/combined.py", line 188: target_resized = F.interpolate(...)
 ```
 
 **Root Cause**:
@@ -96,7 +96,7 @@ but got input with spatial dimensions of [1, 256, 256] and output size of (64, 6
 - Code assumed (B, H, W) and tried to add channel dimension
 - Double channel dimension: (B, 1, H, W) -> unsqueeze(1) -> (B, 1, 1, H, W) ✗
 
-**Fix** (losses_combined.py:189-200):
+**Fix** (losses/combined.py:189-200):
 ```python
 # Before
 target_resized = F.interpolate(
@@ -126,7 +126,7 @@ target_resized = F.interpolate(
 
 **Potential Error**: CrossEntropyLoss expects (B,) but might receive (B, 1)
 
-**Fix** (losses_combined.py:216-220):
+**Fix** (losses/combined.py:216-220):
 ```python
 # Before
 cls_l = self.cls_loss(cls_logits, cls_target)
@@ -256,9 +256,9 @@ loss, loss_dict = crit(seg_logits, seg_target, cls_logits, cls_target, aux_outpu
 
 | File | Lines Changed | Description |
 |------|---------------|-------------|
-| losses_multiclass.py | 2 edits | Device transfer for alpha and class_weights |
-| losses_iou.py | 1 edit | Device transfer for class_weights |
-| losses_combined.py | 2 edits | Target dimension handling + cls_target handling |
+| losses/multiclass.py | 2 edits | Device transfer for alpha and class_weights |
+| losses/iou.py | 1 edit | Device transfer for class_weights |
+| losses/combined.py | 2 edits | Target dimension handling + cls_target handling |
 | phase1_iou_focus.yaml | 1 edit | Correct data path |
 
 **Total**: 6 edits across 4 files

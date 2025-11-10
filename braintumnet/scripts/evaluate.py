@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """
-Comprehensive evaluation script with DSC, IoU, HD, and HD95 metrics.
+Simple evaluation script - just pass checkpoint path.
 
 Usage:
-    # Evaluate a specific checkpoint
-    python scripts/evaluate.py --cfg configs/full_dataset.yaml --ckpt checkpoints/braintumnet_best_fold0.pth --fold 0
-
-    # Evaluate all folds
-    python scripts/evaluate.py --cfg configs/full_dataset.yaml --all_folds
+    python braintumnet/scripts/evaluate.py checkpoints/braintumnet_best_fold0.pth
+    python braintumnet/scripts/evaluate.py checkpoints/braintumnet_best_fold4.pth
 """
 
-import os, argparse, sys
+import os, argparse, sys, re
 from pathlib import Path
 import numpy as np
 
@@ -21,86 +18,119 @@ from braintumnet.utils.io import load_yaml
 from braintumnet.engine.evaluator import evaluate
 
 
+def extract_fold_from_path(ckpt_path):
+    """Extract fold number from checkpoint filename.
+
+    Examples:
+        braintumnet_best_fold0.pth -> 0
+        braintumnet_best_fold4.pth -> 4
+        last_fold2.pth -> 2
+    """
+    match = re.search(r'fold(\d+)', ckpt_path)
+    if match:
+        return int(match.group(1))
+    return 0  # Default to fold 0
+
+
+def detect_model_type_from_path(ckpt_path):
+    """Detect model type from checkpoint path.
+
+    Examples:
+        checkpoints/nnunet/nnunet_fold4/... -> nnunet
+        checkpoints/swin_unetr/... -> swin_unetr
+        checkpoints/braintumnet_best_fold0.pth -> segunetv2 (default)
+    """
+    ckpt_path_lower = ckpt_path.lower()
+
+    # Check for model type in path
+    known_models = ['nnunet', 'swin_unetr', 'unetr', 'transunet', 'lg_unetr', 'segunetv2']
+    for model in known_models:
+        if model in ckpt_path_lower:
+            return model
+
+    # Default to segunetv2
+    return 'segunetv2'
+
+
+def merge_configs(base_cfg, override_cfg):
+    """Deep merge two configs, override_cfg takes precedence"""
+    import copy
+    merged = copy.deepcopy(base_cfg)
+
+    for key, value in override_cfg.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            # Recursively merge dicts
+            merged[key] = merge_configs(merged[key], value)
+        else:
+            # Override value
+            merged[key] = value
+
+    return merged
+
+
 def main():
-    ap = argparse.ArgumentParser(description='Evaluate BrainTumNet model with comprehensive metrics (DSC, IoU, HD, HD95)')
-    ap.add_argument("--cfg", type=str, default=str(ROOT / "configs" / "default.yaml"), help='Path to config YAML file')
-    ap.add_argument("--ckpt", type=str, help='Path to checkpoint file (required if not using --all_folds)')
-    ap.add_argument("--fold", type=int, default=0, help='Fold number to evaluate (default: 0)')
-    ap.add_argument("--all_folds", action='store_true', help='Evaluate all folds using best checkpoints')
+    ap = argparse.ArgumentParser(
+        description='Evaluate BrainTumNet checkpoint with comprehensive metrics (DSC, IoU, HD, HD95)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python braintumnet/scripts/evaluate.py checkpoints/braintumnet_best_fold0.pth
+  python braintumnet/scripts/evaluate.py checkpoints/braintumnet_best_fold4.pth
+        """
+    )
+    ap.add_argument("checkpoint", type=str, help='Path to checkpoint file')
     args = ap.parse_args()
 
-    cfg = load_yaml(args.cfg)
+    ckpt_path = args.checkpoint
 
-    if args.all_folds:
-        # Evaluate all folds
-        print("\n" + "="*70)
-        print("EVALUATING ALL FOLDS")
-        print("="*70)
+    # Verify checkpoint exists
+    if not os.path.exists(ckpt_path):
+        print(f"Error: Checkpoint not found: {ckpt_path}")
+        sys.exit(1)
 
-        all_results = []
-        for fold in range(cfg['data']['num_folds']):
-            ckpt_path = os.path.join(cfg['logging']['save_dir'], f"braintumnet_best_fold{fold}.pth")
-            if not os.path.exists(ckpt_path):
-                print(f"\nWarning: Checkpoint not found for fold {fold}: {ckpt_path}")
-                print(f"Skipping fold {fold}...")
-                continue
+    # Extract fold number from checkpoint path
+    fold = extract_fold_from_path(ckpt_path)
+    print(f"\nDetected fold: {fold}")
 
-            print(f"\n{'='*70}")
-            print(f"FOLD {fold}")
-            print(f"{'='*70}")
-            print(f"Checkpoint: {ckpt_path}")
+    # Detect model type from checkpoint path
+    model_type = detect_model_type_from_path(ckpt_path)
+    print(f"Detected model type: {model_type}")
 
-            results = evaluate(cfg, fold, ckpt_path)
-            results['fold'] = fold
-            all_results.append(results)
+    # Load base config
+    cfg_path = ROOT / "configs" / "base.yaml"
+    print(f"Loading base config: {cfg_path}")
+    cfg = load_yaml(str(cfg_path))
 
-        # Aggregate results
-        if len(all_results) > 0:
-            print("\n" + "="*70)
-            print("AGGREGATED RESULTS ACROSS ALL FOLDS")
-            print("="*70)
-
-            metrics = ['iou', 'dice', 'hd', 'hd95', 'acc', 'f1', 'auc']
-            for metric in metrics:
-                values = [r[metric] for r in all_results if not np.isnan(r[metric])]
-                if len(values) > 0:
-                    mean_val = np.mean(values)
-                    std_val = np.std(values)
-                    print(f"  {metric.upper():6s}: {mean_val:.4f} ± {std_val:.4f}")
-                else:
-                    print(f"  {metric.upper():6s}: N/A")
-            print("="*70 + "\n")
-        else:
-            print("\nNo folds were successfully evaluated.")
-
+    # Load model-specific config if available
+    model_cfg_path = ROOT / "configs" / "models" / f"{model_type}.yaml"
+    if model_cfg_path.exists():
+        print(f"Loading model config: {model_cfg_path}")
+        model_cfg = load_yaml(str(model_cfg_path))
+        cfg = merge_configs(cfg, model_cfg)
     else:
-        # Evaluate single fold
-        if args.ckpt is None:
-            # Try to use default checkpoint path
-            ckpt_path = os.path.join(cfg['logging']['save_dir'], f"braintumnet_best_fold{args.fold}.pth")
-            if not os.path.exists(ckpt_path):
-                print(f"Error: No checkpoint specified and default not found: {ckpt_path}")
-                print("Please specify --ckpt or ensure the checkpoint exists at the default location.")
-                sys.exit(1)
-        else:
-            ckpt_path = args.ckpt
+        print(f"No model-specific config found at {model_cfg_path}, using base config only")
 
-        if not os.path.exists(ckpt_path):
-            print(f"Error: Checkpoint not found: {ckpt_path}")
-            sys.exit(1)
+    # Override fold in config
+    cfg['data']['fold'] = fold
 
-        print(f"\nEvaluating checkpoint: {ckpt_path}")
-        results = evaluate(cfg, args.fold, ckpt_path)
+    # Evaluate
+    print(f"\nEvaluating checkpoint: {ckpt_path}")
+    print("="*70)
 
-        # Print summary
-        print("\nFinal Metrics Summary:")
-        print(f"  IoU:   {results['iou']:.4f}")
-        print(f"  Dice:  {results['dice']:.4f}")
-        print(f"  HD:    {results['hd']:.2f} px")
-        print(f"  HD95:  {results['hd95']:.2f} px")
-        print(f"  Acc:   {results['acc']:.4f}")
-        print(f"  F1:    {results['f1']:.4f}")
-        print(f"  AUC:   {results['auc']:.4f}\n")
+    results = evaluate(cfg, fold, ckpt_path)
+
+    # Print summary
+    print("\n" + "="*70)
+    print("EVALUATION RESULTS")
+    print("="*70)
+    print(f"  IoU (Jaccard):  {results['iou']:.4f}")
+    print(f"  Dice (F1):      {results['dice']:.4f}")
+    print(f"  HD:             {results['hd']:.2f} px")
+    print(f"  HD95:           {results['hd95']:.2f} px")
+    print(f"  Accuracy:       {results['acc']:.4f}")
+    print(f"  F1 Score:       {results['f1']:.4f}")
+    print(f"  AUC-ROC:        {results['auc']:.4f}")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":

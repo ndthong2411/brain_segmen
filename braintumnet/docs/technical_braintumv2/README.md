@@ -62,8 +62,8 @@ Tài liệu kỹ thuật chi tiết về **SegUNetV2** và các cải tiến Pha
 - `src/braintumnet/models/multiscale_transformer.py` (243 dòng)
 
 ### Configuration
-- `configs/phase2_small.yaml` - RTX 3090
-- `configs/phase2_a100.yaml` - A100 80GB
+- `configs/phases/phase2_small.yaml` - RTX 3090
+- `configs/phases/phase2_a100.yaml` - A100 80GB
 - `configs/models/segunetv2_phase2.yaml` - Model config
 
 ---

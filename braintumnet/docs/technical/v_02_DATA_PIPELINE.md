@@ -61,7 +61,7 @@ Original data → Augmented variants
 
 ## 2. File Analysis: preprocess_h5_to_multiclass.py
 
-**Location**: `scripts/preprocess_h5_to_multiclass.py`
+**Location**: `scripts/preprocessing/preprocess_h5_to_multiclass.py`
 **Total Lines**: ~380
 **Purpose**: Convert raw BraTS2020 H5 files to multi-class PNG format
 

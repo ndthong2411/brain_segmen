@@ -4,7 +4,7 @@
 
 ### Config Của Bạn
 ```yaml
-# File: configs/phase2_a100.yaml
+# File: configs/phases/phase2_a100.yaml
 train:
   loss_type: "ultimate_multitask"  # ← Đây là loss bạn đang dùng
 ```
@@ -19,10 +19,10 @@ Trainer (trainer.py line 150)
   from losses_combined import create_loss_from_config
   crit = create_loss_from_config(cfg)
         ↓
-Factory (losses_combined.py line 294)
+Factory (losses/combined.py line 294)
   return UltimateMultiTaskLoss(...)
         ↓
-Class (losses_combined.py line 137)
+Class (losses/combined.py line 137)
   UltimateMultiTaskLoss
     → Segmentation: UltimateLoss (line 168)
     → Classification: CrossEntropyLoss (line 171)
@@ -34,7 +34,7 @@ Class (losses_combined.py line 137)
 
 ### Level 1: UltimateMultiTaskLoss (Top Level)
 
-**File:** `src/braintumnet/losses_combined.py`
+**File:** `src/braintumnet/losses/combined.py`
 **Class:** `UltimateMultiTaskLoss` (line 137)
 
 ```python
@@ -80,7 +80,7 @@ Total Loss = 1.0 × SegmentationLoss + 0.5 × ClassificationLoss
 
 ### Level 2: UltimateLoss (Segmentation Component)
 
-**File:** `src/braintumnet/losses_combined.py`
+**File:** `src/braintumnet/losses/combined.py`
 **Class:** `UltimateLoss` (line 25)
 
 ```python
@@ -133,7 +133,7 @@ SegLoss = 1.0×Dice + 1.0×Focal + 2.5×IoU + 0.6×Boundary
 
 #### 3.1 Dice Loss
 
-**File:** `src/braintumnet/losses_multiclass.py`
+**File:** `src/braintumnet/losses/multiclass.py`
 **Class:** `MultiClassDiceLoss` (line 20)
 
 ```python
@@ -173,7 +173,7 @@ Trong đó:
 
 #### 3.2 Focal Loss
 
-**File:** `src/braintumnet/losses_multiclass.py`
+**File:** `src/braintumnet/losses/multiclass.py`
 **Class:** `MultiClassFocalLoss` (line 86)
 
 ```python
@@ -215,7 +215,7 @@ Alpha weights:
 
 #### 3.3 IoU Loss (✅ Bug Fixed!)
 
-**File:** `src/braintumnet/losses_iou.py`
+**File:** `src/braintumnet/losses/iou.py`
 **Class:** `MulticlassIoULoss` (line 23)
 
 ```python
@@ -258,7 +258,7 @@ Range: [0, 4.0]
 
 #### 3.4 Boundary Loss
 
-**File:** `src/braintumnet/losses_boundary.py`
+**File:** `src/braintumnet/losses/boundary.py`
 **Class:** `BoundaryLoss` (line 23)
 
 ```python
@@ -412,7 +412,7 @@ Loss type: <class 'braintumnet.losses_combined.UltimateMultiTaskLoss'>
 ### Option 1: Edit Config File
 
 ```yaml
-# configs/phase2_a100.yaml
+# configs/phases/phase2_a100.yaml
 train:
   # Change loss type
   loss_type: "ultimate_multitask"  # or "ultimate", "dice_focal", etc
@@ -430,7 +430,7 @@ train:
 
 ### Option 2: Create New Loss
 
-1. **Define in losses_combined.py:**
+1. **Define in losses/combined.py:**
 ```python
 class MyCustomLoss(nn.Module):
     def __init__(self, ...):
@@ -516,10 +516,10 @@ Try:
 
 | File | Purpose |
 |------|---------|
-| **losses_combined.py** | UltimateLoss, UltimateMultiTaskLoss, factory |
-| **losses_multiclass.py** | Dice, Focal losses |
-| **losses_iou.py** | IoU, Tversky losses (✅ fixed!) |
-| **losses_boundary.py** | Boundary, Hausdorff losses |
+| **losses/combined.py** | UltimateLoss, UltimateMultiTaskLoss, factory |
+| **losses/multiclass.py** | Dice, Focal losses |
+| **losses/iou.py** | IoU, Tversky losses (✅ fixed!) |
+| **losses/boundary.py** | Boundary, Hausdorff losses |
 | **trainer.py** | Loss instantiation, training loop |
 | **Config YAML** | Loss configuration |
 
@@ -542,10 +542,10 @@ Total = 1.0×(Dice + Focal + 2.5×IoU + 0.6×Boundary) + 0.5×Classification
 ```
 
 **Files involved:**
-- Config: `configs/phase2_a100.yaml`
-- Factory: `losses_combined.py::create_loss_from_config()`
-- Loss: `losses_combined.py::UltimateMultiTaskLoss`
-- Components: `losses_multiclass.py`, `losses_iou.py`, `losses_boundary.py`
+- Config: `configs/phases/phase2_a100.yaml`
+- Factory: `losses/combined.py::create_loss_from_config()`
+- Loss: `losses/combined.py::UltimateMultiTaskLoss`
+- Components: `losses/multiclass.py`, `losses/iou.py`, `losses/boundary.py`
 - Training: `trainer.py`
 
 **All components are positive after fix!** ✅

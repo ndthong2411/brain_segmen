@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main_single"] 1762434481.59941 "main_single.aux" "main_single.bbl" "main_single" 1762434482.72274 0
+["bibtex main_single"] 0 "main_single.aux" "main_single.bbl" "main_single" 1762738714.47175 -1
   "./references.bib" 1762433245 9278 d216d10c25d43b1d5b383be0d826a737 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/bibtex/bst/llncs/splncs04.bst" 1741086508 32146 aadf770ded437d161532035219ea6f45 ""
-  "main_single.aux" 1762434482 7950 0bbf4009f96deea74ea88d3ead79f7f8 "pdflatex"
+  "main_single.aux" 1762738713 6176 5e33e0bc5d4221de7159f40c1ecec039 "pdflatex"
   (generated)
   "main_single.bbl"
   "main_single.blg"
   (rewritten before read)
-["pdflatex"] 1762434481.79306 "e:/thong/code/brain_segmen/latex/main_single.tex" "main_single.pdf" "main_single" 1762434482.72308 0
+["pdflatex"] 1762738713.217 "e:/thong/code/brain_segmen/latex/main_single.tex" "main_single.pdf" "main_single" 1762738714.47212 2
   "C:/Users/Thon/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1762416944 80909 eab91d9745dd2edfd62a31d53cd5fe15 ""
   "C:/Users/Thon/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/ecbx0900.pk" 1762416952 22504 9956a6c5f7ce44301578ed2129c1bf9d ""
   "C:/Users/Thon/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/ecbx1000.pk" 1762416949 25420 aaee009a85d0e9cd9685a837a805c338 ""
@@ -59,10 +59,10 @@
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi7.pfb" 1247596667 36281 c355509802a035cadc5f15869451dcee ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi9.pfb" 1247596667 36094 798f80770b3b148ceedd006d487db67c ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr10.pfb" 1247596667 35752 024fb6c41858982481f6968b5fc26508 ""
-  "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr6.pfb" 1247596667 32734 69e00a6b65cedb993666e42eedb3d48f ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr7.pfb" 1247596667 32762 7fee39e011c23b3589931effd97b9702 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr9.pfb" 1247596666 33993 9b89b85fd2d9df0482bd47194d1d3bf3 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb" 1247596667 32569 5e5ddc8df908dea60932f3c484a54c0d ""
+  "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy6.pfb" 1247596667 32587 65067f817f408bc71a7312f3d9828a9b ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy7.pfb" 1247596666 32716 08e384dc442464e7285e891af9f45947 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy9.pfb" 1247596666 32442 c975af247b6702f7ca0c299af3616b80 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msbm10.pfb" 1247596673 34694 870c211f62cb72718a00e353f14f254d ""
@@ -121,12 +121,12 @@
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1751104012 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/tex/latex/tools/multicol.sty" 1749468414 33259 db80f750a01491473161bd4d0f6986d2 ""
   "C:/Users/Thon/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
-  "e:/thong/code/brain_segmen/latex/main_single.tex" 1762434237 31555 a7e05d99d300b81870372c0c06d7942a ""
-  "figures/architecture.pdf" 1762423477 55165 0b25eab3682fe20e078ab585bac0a5f4 ""
-  "main_single.aux" 1762434482 7950 0bbf4009f96deea74ea88d3ead79f7f8 "pdflatex"
-  "main_single.bbl" 1762434481 4767 30967fecb607dcfde232bca0632d846b "bibtex main_single"
-  "main_single.out" 1762434482 586 8b10c5732973510d262c3ae38226936d "pdflatex"
-  "main_single.tex" 1762434237 31555 a7e05d99d300b81870372c0c06d7942a ""
+  "e:/thong/code/brain_segmen/latex/main_single.tex" 1762738711 38140 c682cbf2a21b4b40e957fcb9fe72c42d ""
+  "figures/archi.png" 1762734236 321431 9a7fa1d4b038b5d1df95b204dfc56045 ""
+  "main_single.aux" 1762738713 6176 5e33e0bc5d4221de7159f40c1ecec039 "pdflatex"
+  "main_single.bbl" 1762735264 0 d41d8cd98f00b204e9800998ecf8427e "bibtex main_single"
+  "main_single.out" 1762738713 586 8b10c5732973510d262c3ae38226936d "pdflatex"
+  "main_single.tex" 1762738711 38140 c682cbf2a21b4b40e957fcb9fe72c42d ""
   (generated)
   "main_single.aux"
   "main_single.log"

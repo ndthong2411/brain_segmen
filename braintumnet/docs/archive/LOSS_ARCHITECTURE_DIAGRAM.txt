@@ -106,7 +106,7 @@ TOTAL = 23.4 + 0.5×0.22 = 23.51 ✅ POSITIVE
    └────────────────────────────────────────┘
               │
               ▼
-3. Factory (losses_combined.py line 294)
+3. Factory (losses/combined.py line 294)
    ┌────────────────────────────────────────┐
    │ if loss_type == 'ultimate_multitask': │
    │     return UltimateMultiTaskLoss(     │
@@ -122,7 +122,7 @@ TOTAL = 23.4 + 0.5×0.22 = 23.51 ✅ POSITIVE
    └────────────────────────────────────────┘
               │
               ▼
-4. UltimateMultiTaskLoss (losses_combined.py line 137)
+4. UltimateMultiTaskLoss (losses/combined.py line 137)
    ┌────────────────────────────────────────┐
    │ self.seg_loss = UltimateLoss(...)     │
    │ self.cls_loss = CrossEntropyLoss()    │
@@ -134,7 +134,7 @@ TOTAL = 23.4 + 0.5×0.22 = 23.51 ✅ POSITIVE
    └────────────────────────────────────────┘
               │
               ▼
-5. UltimateLoss (losses_combined.py line 25)
+5. UltimateLoss (losses/combined.py line 25)
    ┌────────────────────────────────────────┐
    │ self.dice_loss = MultiClassDiceLoss() │
    │ self.focal_loss = MultiClassFocalLoss│
@@ -170,19 +170,19 @@ losses_multiclass losses_multiclass losses_iou losses_boundary
 ```
 trainer.py
     │
-    ├─ imports ─→ losses_combined.py (create_loss_from_config)
+    ├─ imports ─→ losses/combined.py (create_loss_from_config)
                        │
-                       ├─ imports ─→ losses_multiclass.py
+                       ├─ imports ─→ losses/multiclass.py
                        │                  │
                        │                  ├─ MultiClassDiceLoss
                        │                  └─ MultiClassFocalLoss
                        │
-                       ├─ imports ─→ losses_iou.py
+                       ├─ imports ─→ losses/iou.py
                        │                  │
                        │                  ├─ MulticlassIoULoss ✅ FIXED
                        │                  └─ TverskyLoss
                        │
-                       └─ imports ─→ losses_boundary.py
+                       └─ imports ─→ losses/boundary.py
                                           │
                                           ├─ BoundaryLoss
                                           └─ HausdorffLoss
@@ -289,7 +289,7 @@ Training Loop (trainer.py):
 ├───────────────────────────────────────────────────────────┤
 │                                                            │
 │ Loss Type:  ultimate_multitask                            │
-│ Location:   losses_combined.py::UltimateMultiTaskLoss    │
+│ Location:   losses/combined.py::UltimateMultiTaskLoss    │
 │                                                            │
 │ Components:                                                │
 │   ✅ Dice Loss     (weight 1.0, class-weighted)          │
@@ -302,7 +302,7 @@ Training Loop (trainer.py):
 │   Total = Seg + 0.5×Cls                                  │
 │   Seg = Dice + Focal + 2.5×IoU + 0.6×Boundary            │
 │                                                            │
-│ Config File: configs/phase2_a100.yaml                     │
+│ Config File: configs/phases/phase2_a100.yaml                     │
 │                                                            │
 │ All components are POSITIVE after fix! ✅                │
 └───────────────────────────────────────────────────────────┘

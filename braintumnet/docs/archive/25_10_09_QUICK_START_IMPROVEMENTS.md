@@ -43,7 +43,7 @@ src/braintumnet/models/
 ├── braintumnet.py       ✅ Handle deep supervision outputs
 
 src/braintumnet/
-├── losses.py            ✅ +BoundaryLoss class, +boundary_w parameter
+├── losses/base.py            ✅ +BoundaryLoss class, +boundary_w parameter
 
 src/braintumnet/engine/
 ├── trainer.py           ✅ Compute auxiliary losses, +boundary loss

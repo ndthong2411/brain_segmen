@@ -482,8 +482,8 @@ src/braintumnet/
 │   ├── metrics_logger.py  # CSV/JSON logging
 │   └── seed.py      # Reproducibility
 │
-├── losses.py        # Loss functions
-└── metrics.py       # Evaluation metrics
+├── losses/base.py        # Loss functions
+└── metrics/base.py       # Evaluation metrics
 ```
 
 ### Scripts (Entry Points)

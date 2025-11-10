@@ -68,7 +68,7 @@ base=64, dim=512, depth=4, n_heads=8, dropout=0.15
 
 ### 3. **Enhanced Loss Functions** ⭐ (MAJOR)
 
-**Hiện trạng trong code - losses.py**:
+**Hiện trạng trong code - losses/base.py**:
 
 **New loss functions**:
 1. **FocalLoss** - Xử lý class imbalance
@@ -189,8 +189,8 @@ else:
 ## 📊 Statistics
 
 ### Code Changes
-- **New files**: 2 major (`seg_unet_v2.py`, `losses_multiclass.py`)
-- **Modified files**: 3 major (`braintumnet.py`, `losses.py`, configs)
+- **New files**: 2 major (`seg_unet_v2.py`, `losses/multiclass.py`)
+- **Modified files**: 3 major (`braintumnet.py`, `losses/base.py`, configs)
 - **New features**: 6 major (multi-class, V2 model, focal loss, boundary loss, deep supervision, multi-scale fusion)
 
 ### Documentation Update Needed

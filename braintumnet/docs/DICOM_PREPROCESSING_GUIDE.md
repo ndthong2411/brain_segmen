@@ -278,19 +278,19 @@ Sau khi preprocessing xong, training hoàn toàn giống H5 format:
 
 ```bash
 # Update config to point to DICOM processed data
-# Edit configs/phase2_small.yaml:
+# Edit configs/phases/phase2_small.yaml:
 # data:
 #   proc_root: "data/processed_multiclass_dicom"
 
 # Train
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 
 # Monitor
 tensorboard --logdir runs/
 
 # Evaluate
 python scripts/evaluate.py \
-    --cfg configs/phase2_small.yaml \
+    --cfg configs/phases/phase2_small.yaml \
     --ckpt checkpoints/braintumnet_best_fold0.pth \
     --fold 0
 ```
@@ -400,7 +400,7 @@ tree -L 2 /path/to/dicom/data | head -50
 ```bash
 # Visualize một vài samples
 python scripts/visualize_batch.py \
-    --cfg configs/phase2_small.yaml \
+    --cfg configs/phases/phase2_small.yaml \
     --fold 0 \
     --n 8
 ```

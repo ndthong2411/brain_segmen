@@ -332,7 +332,7 @@ python scripts/preprocess_dicom_to_multiclass.py \
     --out_dir data/processed_png
 
 # Train on PNG
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 ```
 
 ---

@@ -295,7 +295,7 @@ hd95 = compute_hausdorff_distance_95(pred, target)
 
 ## Files Modified
 
-1. **[src/braintumnet/metrics.py](../src/braintumnet/metrics.py)** - Added comprehensive metric functions
+1. **[src/braintumnet/metrics/base.py](../src/braintumnet/metrics/base.py)** - Added comprehensive metric functions
 2. **[src/braintumnet/engine/evaluator.py](../src/braintumnet/engine/evaluator.py)** - Updated to compute HD/HD95
 3. **[scripts/evaluate.py](../scripts/evaluate.py)** - Enhanced evaluation script
 

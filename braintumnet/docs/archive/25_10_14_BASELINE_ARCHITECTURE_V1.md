@@ -429,7 +429,7 @@ class TInceptionBlock(nn.Module):
 
 **Multi-Task Loss**:
 ```python
-# File: src/braintumnet/losses_multiclass.py (used in trainer)
+# File: src/braintumnet/losses/multiclass.py (used in trainer)
 
 class MultiTaskMultiClassLoss(nn.Module):
     def forward(self, seg_logits, seg_mask, cls_logits, cls_label):
@@ -508,7 +508,7 @@ Memory usage (training):
 
 ### Loss Function
 
-**File**: [src/braintumnet/losses_multiclass.py](../src/braintumnet/losses_multiclass.py)
+**File**: [src/braintumnet/losses/multiclass.py](../src/braintumnet/losses/multiclass.py)
 
 ```yaml
 train:
@@ -746,9 +746,9 @@ braintumnet/
 │   │   ├── trainer.py               # ⭐ Training loop
 │   │   └── evaluator.py             # Evaluation
 │   │
-│   ├── losses_multiclass.py         # ⭐ Loss functions
+│   ├── losses/multiclass.py         # ⭐ Loss functions
 │   ├── metrics_multiclass.py        # ⭐ Metrics computation
-│   └── multiclass_metrics.py        # Additional metrics
+│   └── metrics/multiclass.py        # Additional metrics
 │
 ├── scripts/
 │   ├── train.py                     # ⭐ Training script
@@ -1065,7 +1065,7 @@ print(f"Grade: {'HGG' if cls_pred == 1 else 'LGG'} (prob: {cls_prob[cls_pred]:.2
 # Full reproduction from scratch
 
 # 1. Preprocess data
-python scripts/preprocess_h5_to_multiclass.py \
+python scripts/preprocessing/preprocess_h5_to_multiclass.py \
     --h5_dir "path/to/brats2020/h5" \
     --out_dir "data/processed_multiclass" \
     --img_size 256 \

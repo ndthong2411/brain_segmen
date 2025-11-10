@@ -6,11 +6,8 @@ Averages predictions from all 5 fold models for improved generalization.
 Expected gain: +3-4% IoU (use existing fold models!)
 
 Usage:
-    python scripts/ensemble_inference.py --config configs/phase2_small.yaml \
-                                         --checkpoints "checkpoints/braintumnet_best_fold*.pth" \
-                                         --data_root data/processed_multiclass \
-                                         --output results/ensemble_results.csv \
-                                         --use_tta
+    python braintumnet/scripts/ensemble_inference.py "checkpoints/braintumnet_best_fold*.pth"
+    python braintumnet/scripts/ensemble_inference.py "checkpoints/braintumnet_best_fold*.pth" --use_tta
 
 Author: BrainTumNet Phase 3
 Date: 2025-10-14
@@ -35,7 +32,14 @@ from braintumnet.models.braintumnet import BrainTumNet
 from braintumnet.models.braintumnet_v2 import BrainTumNetV2
 from braintumnet.data.brats2020_dataset import SliceDataset
 from torch.utils.data import DataLoader
-from tta_inference import tta_predict_single, compute_iou
+# Import TTA functions from tta_inference.py in same directory
+import importlib.util
+spec = importlib.util.spec_from_file_location("tta_inference",
+                                                os.path.join(os.path.dirname(__file__), "tta_inference.py"))
+tta_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tta_module)
+tta_predict_single = tta_module.tta_predict_single
+compute_iou = tta_module.compute_iou
 
 
 def load_models(checkpoint_paths, cfg, device='cuda'):
@@ -122,26 +126,34 @@ def ensemble_predict(models, image, device='cuda', use_tta=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='5-Fold Ensemble Inference')
-    parser.add_argument('--config', type=str, required=True, help='Path to config file')
-    parser.add_argument('--checkpoints', type=str, required=True,
-                       help='Checkpoint pattern (e.g., "checkpoints/best_fold*.pth")')
-    parser.add_argument('--data_root', type=str, default='data/processed_multiclass',
-                       help='Data root directory')
-    parser.add_argument('--fold', type=int, default=None,
-                       help='Specific fold for validation (None = use all data)')
+    parser = argparse.ArgumentParser(
+        description='5-Fold Ensemble Inference - just pass checkpoint glob pattern',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python braintumnet/scripts/ensemble_inference.py "checkpoints/braintumnet_best_fold*.pth"
+  python braintumnet/scripts/ensemble_inference.py "checkpoints/braintumnet_best_fold*.pth" --use_tta
+        """
+    )
+    parser.add_argument('checkpoints', type=str,
+                       help='Checkpoint glob pattern (e.g., "checkpoints/braintumnet_best_fold*.pth")')
     parser.add_argument('--output', type=str, default='results/ensemble_results.csv',
-                       help='Output CSV file')
+                       help='Output CSV file (default: results/ensemble_results.csv)')
     parser.add_argument('--use_tta', action='store_true',
-                       help='Use TTA for each model (SLOW but +2-3% IoU)')
+                       help='Use TTA for each model (SLOW but +2-3%% IoU)')
     parser.add_argument('--device', type=str, default='cuda', help='Device to use')
 
     args = parser.parse_args()
 
-    # Load config
-    print(f"Loading config from: {args.config}")
-    with open(args.config, 'r') as f:
+    # Load base config
+    ROOT = Path(__file__).resolve().parents[1]
+    cfg_path = ROOT / "configs" / "base.yaml"
+    print(f"Loading config from: {cfg_path}")
+    with open(cfg_path, 'r') as f:
         cfg = yaml.safe_load(f)
+
+    # Get data_root from config
+    data_root = cfg['data']['proc_root']
 
     # Create output directory
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -157,17 +169,13 @@ def main():
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     models = load_models(checkpoint_paths, cfg, device)
 
-    # Load validation dataset
-    if args.fold is not None:
-        split_file = os.path.join(args.data_root, f'val_fold{args.fold}.csv')
-        print(f"\nUsing validation fold {args.fold}: {split_file}")
-    else:
-        # Use all validation data (average across all folds)
-        print("\nNo specific fold specified, using fold 0 validation data")
-        split_file = os.path.join(args.data_root, 'val_fold0.csv')
+    # Load validation dataset (use fold 0 as default for ensemble)
+    fold = 0
+    split_file = os.path.join(data_root, f'val_fold{fold}.csv')
+    print(f"\nUsing validation fold {fold}: {split_file}")
 
     dataset = SliceDataset(
-        proc_root=args.data_root,
+        proc_root=data_root,
         split_file=split_file,
         img_size=cfg['data']['img_size'],
         train=False,

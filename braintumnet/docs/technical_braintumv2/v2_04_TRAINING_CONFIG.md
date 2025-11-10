@@ -464,24 +464,24 @@ train:
 
 ```bash
 # Train fold 0
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 
 # Resume from checkpoint
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0 \
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0 \
   --resume checkpoints/braintumnet_phase2_small_fold0_best.pth
 
 # Train all folds
-python scripts/train_all_folds.py --cfg configs/phase2_small.yaml
+python scripts/train_all_folds.py --cfg configs/phases/phase2_small.yaml
 ```
 
 ### Phase 2 Large (A100)
 
 ```bash
 # Train fold 0
-python scripts/train.py --cfg configs/phase2_a100.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_a100.yaml --fold 0
 
 # With optional features
-python scripts/train.py --cfg configs/phase2_a100.yaml --fold 0 \
+python scripts/train.py --cfg configs/phases/phase2_a100.yaml --fold 0 \
   --use-multiscale-transformer --use-attention-gates
 ```
 

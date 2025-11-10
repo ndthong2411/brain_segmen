@@ -9,7 +9,7 @@ echo.
 echo Press Ctrl+C to cancel, or
 pause
 
-python scripts\preprocess_nifti_to_multiclass.py ^
+python scripts\preprocessing\preprocess_nifti_to_multiclass.py ^
     --nifti_dir "E:\thong\code\brain_segmen\braintumnet\data\raw\BraTS2020_TrainingData\MICCAI_BraTS2020_TrainingData" ^
     --out_dir "E:\thong\code\brain_segmen\braintumnet\data\processed_multiclass_4class" ^
     --img_size 256 ^

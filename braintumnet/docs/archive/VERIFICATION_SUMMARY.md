@@ -121,8 +121,8 @@ E:\thong\code\brain_segmen\
 │   │   ├── engine/
 │   │   │   ├── trainer.py ✅           # Training logic
 │   │   │   └── evaluator.py ✅         # Evaluation logic
-│   │   ├── losses.py ✅                # DiceCE + MultiTask
-│   │   ├── metrics.py ✅               # IoU, Dice, HD95, etc.
+│   │   ├── losses/base.py ✅                # DiceCE + MultiTask
+│   │   ├── metrics/base.py ✅               # IoU, Dice, HD95, etc.
 │   │   └── utils/ ✅                   # I/O, seeding
 │   └── requirements.txt ✅
 ├── checkpoints/

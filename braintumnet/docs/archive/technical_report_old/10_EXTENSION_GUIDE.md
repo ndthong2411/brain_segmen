@@ -202,7 +202,7 @@ model:
 
 ### Example 1: Focal Loss
 
-**Create** `src/braintumnet/losses.py` (add to existing):
+**Create** `src/braintumnet/losses/base.py` (add to existing):
 
 ```python
 import torch
@@ -394,7 +394,7 @@ class DiceBoundaryLoss(nn.Module):
 
 ### Example: Sensitivity and Specificity
 
-**Add to** `src/braintumnet/metrics.py`:
+**Add to** `src/braintumnet/metrics/base.py`:
 
 ```python
 def sensitivity_specificity(logits: torch.Tensor, target: torch.Tensor, eps=1e-6) -> Tuple[float, float]:

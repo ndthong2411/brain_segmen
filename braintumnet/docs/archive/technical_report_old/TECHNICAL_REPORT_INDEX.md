@@ -63,8 +63,8 @@ This report is divided into detailed chapters. **Read them in order for best und
   - File-by-file code explanation:
     - `train.py` - Entry point
     - `trainer.py` - Training engine (every function)
-    - `losses.py` - Loss functions
-    - `metrics.py` - Metrics computation
+    - `losses/base.py` - Loss functions
+    - `metrics/base.py` - Metrics computation
   - How checkpointing works
   - How to modify training
 
@@ -141,8 +141,8 @@ This report is divided into detailed chapters. **Read them in order for best und
 Skip to the parts you need:
 - **Modify data augmentation**: Part 2, Section on `transforms.py`
 - **Change model architecture**: Part 3
-- **Add new loss function**: Part 4, Section on `losses.py`
-- **Add new metrics**: Part 5, Section on `metrics.py`
+- **Add new loss function**: Part 4, Section on `losses/base.py`
+- **Add new metrics**: Part 5, Section on `metrics/base.py`
 - **Debug training issues**: Part 9
 
 ---
@@ -209,8 +209,8 @@ src/braintumnet/utils/
 #### 6. Core Package (Metrics & Losses) - 2 files
 ```
 src/braintumnet/
-├── losses.py             [28 lines]   - Loss functions
-└── metrics.py            [~150 lines] - Evaluation metrics
+├── losses/base.py             [28 lines]   - Loss functions
+└── metrics/base.py            [~150 lines] - Evaluation metrics
 ```
 
 ---
@@ -299,7 +299,7 @@ After reading this documentation, you'll understand:
 ✅ **All training files** (`train.py`, `trainer.py`, `evaluator.py`)
 ✅ **All data files** (`brats2020_dataset.py`, `transforms.py`, `prepare_brats2020_h5.py`)
 ✅ **All utility files** (`io.py`, `logger.py`, `metrics_logger.py`)
-✅ **Core metrics and losses** (`losses.py`, `metrics.py`)
+✅ **Core metrics and losses** (`losses/base.py`, `metrics/base.py`)
 
 ### Files That Are Redundant/Optional
 

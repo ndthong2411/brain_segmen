@@ -2,7 +2,7 @@ import os, torch, numpy as np
 from torch.utils.data import DataLoader
 from typing import Dict
 from tqdm import tqdm
-from ..models.braintumnet import BrainTumNet
+from ..models import build_model
 from ..data.brats2020_dataset import SliceDataset
 from ..metrics import (cls_metrics, compute_intersection_union,
                        compute_segmentation_metrics, binarize)
@@ -11,13 +11,23 @@ from ..utils.io import load_ckpt
 def evaluate(cfg: Dict, fold: int, ckpt_path: str):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     proc = cfg["data"]["proc_root"]
-    val_list = os.path.join(proc, f"split_val_fold{fold}.txt")
+    # Try CSV format first (newer), then fallback to TXT format (older)
+    val_list_csv = os.path.join(proc, f"val_fold{fold}.csv")
+    val_list_txt = os.path.join(proc, f"split_val_fold{fold}.txt")
+
+    if os.path.exists(val_list_csv):
+        val_list = val_list_csv
+    elif os.path.exists(val_list_txt):
+        val_list = val_list_txt
+    else:
+        raise FileNotFoundError(f"Validation split file not found. Tried:\n  {val_list_csv}\n  {val_list_txt}")
+
     ds = SliceDataset(proc, val_list, cfg["data"]["img_size"], train=False, in_channels=cfg["model"]["in_channels"])
-    dl = DataLoader(ds, batch_size=cfg["train"]["batch_size"], shuffle=False, num_workers=cfg["train"]["workers"])
-    model = BrainTumNet(in_ch=cfg["model"]["in_channels"], num_cls=cfg["model"]["num_classes_cls"],
-                        base=cfg["model"]["base"], dim=cfg["model"]["dim"], patch=cfg["model"]["patch_size"],
-                        depth=cfg["model"]["depth"], n_heads=cfg["model"]["n_heads"],
-                        roi_stop_grad=cfg["model"]["roi_stop_grad"]).to(device)
+    # Use num_workers=0 for evaluation to avoid Windows multiprocessing pickling errors
+    dl = DataLoader(ds, batch_size=cfg["train"]["batch_size"], shuffle=False, num_workers=0)
+
+    # Build model using factory (supports all model types: nnunet, swin_unetr, etc.)
+    model = build_model(cfg).to(device)
     load_ckpt(model, ckpt_path, map_location=device)
     model.eval()
 
@@ -37,13 +47,26 @@ def evaluate(cfg: Dict, fold: int, ckpt_path: str):
             img = batch["image"].to(device)
             msk = batch["mask"].to(device)
             lab = batch["label"].cpu().numpy()
-            seg, cls = model(img)
 
-            # Classification
-            prob = F.softmax(cls, dim=1).cpu().numpy()
-            y_true.extend(lab.tolist())
-            y_pred.extend(prob.argmax(1).tolist())
-            y_prob.extend(prob.tolist())
+            # Model output - handle different model types
+            output = model(img)
+
+            # Handle different model outputs
+            if isinstance(output, tuple):
+                # Models with (seg, cls) output (e.g., BrainTumNet, nnUNet with classification)
+                seg = output[0]
+                cls = output[1] if len(output) > 1 else None
+            else:
+                # Models with seg-only output (e.g., Swin-UNETR, UNETR)
+                seg = output
+                cls = None
+
+            # Classification (if available)
+            if cls is not None:
+                prob = F.softmax(cls, dim=1).cpu().numpy()
+                y_true.extend(lab.tolist())
+                y_pred.extend(prob.argmax(1).tolist())
+                y_prob.extend(prob.tolist())
 
             # Segmentation (accumulate global metrics)
             inter, union = compute_intersection_union(seg, msk)
@@ -68,9 +91,12 @@ def evaluate(cfg: Dict, fold: int, ckpt_path: str):
                     if not np.isinf(metrics['hd95']) and not np.isnan(metrics['hd95']):
                         hd95_scores.append(metrics['hd95'])
 
-    # Compute classification metrics
-    y_true = np.array(y_true); y_pred = np.array(y_pred); y_prob = np.array(y_prob)
-    acc, f1, auc = cls_metrics(y_true, y_pred, y_prob)
+    # Compute classification metrics (only if classification head exists)
+    if len(y_true) > 0:
+        y_true = np.array(y_true); y_pred = np.array(y_pred); y_prob = np.array(y_prob)
+        acc, f1, auc = cls_metrics(y_true, y_pred, y_prob)
+    else:
+        acc, f1, auc = 0.0, 0.0, 0.0
 
     # Compute segmentation metrics
     eps = 1e-6
@@ -92,10 +118,15 @@ def evaluate(cfg: Dict, fold: int, ckpt_path: str):
     print(f"  Hausdorff Distance:   {hd_mean:.2f} ± {hd_std:.2f} pixels")
     print(f"  HD95 (95th percentile): {hd95_mean:.2f} ± {hd95_std:.2f} pixels")
     print(f"  (HD computed on {len(hd_scores)} slices with tumor)")
-    print("\nClassification Metrics:")
-    print(f"  Accuracy:             {acc:.4f}")
-    print(f"  F1 Score:             {f1:.4f}")
-    print(f"  AUC-ROC:              {auc:.4f}")
+
+    if len(y_true) > 0:
+        print("\nClassification Metrics:")
+        print(f"  Accuracy:             {acc:.4f}")
+        print(f"  F1 Score:             {f1:.4f}")
+        print(f"  AUC-ROC:              {auc:.4f}")
+    else:
+        print("\nClassification Metrics: N/A (model has no classification head)")
+
     print("=" * 70 + "\n")
 
     return {

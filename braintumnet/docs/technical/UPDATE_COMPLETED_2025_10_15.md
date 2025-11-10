@@ -23,7 +23,7 @@
 - ✅ Added Model Versions section (V1 vs V2)
 - ✅ Updated Multi-Class Segmentation Support (3 classes: Background, TC, ED)
 - ✅ Updated Configuration Files section (phase2_a100.yaml, phase2_small.yaml)
-- ✅ Updated Package Structure with new files (seg_unet_v2.py, losses_multiclass.py)
+- ✅ Updated Package Structure with new files (seg_unet_v2.py, losses/multiclass.py)
 - ✅ Updated Loss Functions list
 
 **New Content Added**: ~200 lines
@@ -293,8 +293,8 @@
 
 ### For Phase 2 Training:
 1. Read [v_01_PROJECT_OVERVIEW.md](v_01_PROJECT_OVERVIEW.md) - Section "Phase 2 Configs"
-2. Use `configs/phase2_small.yaml` for RTX 3090
-3. Use `configs/phase2_a100.yaml` for A100 GPU
+2. Use `configs/phases/phase2_small.yaml` for RTX 3090
+3. Use `configs/phases/phase2_a100.yaml` for A100 GPU
 
 ---
 

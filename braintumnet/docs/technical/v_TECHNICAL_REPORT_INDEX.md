@@ -97,8 +97,8 @@ Báo cáo này chứa **13,473 dòng** tài liệu kỹ thuật chi tiết chia 
   - **Hướng dẫn vòng lặp huấn luyện hoàn chỉnh** (epoch → batch → forward → loss → backward → update)
   - **Giải thích từng dòng**:
     - `trainer.py` (giải thích 307 dòng) - Engine huấn luyện với fold validation
-    - `losses.py` (giải thích 28 dòng) - Triển khai Dice Loss + BCE
-    - `metrics.py` (giải thích 248 dòng) - Tính toán IoU, Dice, HD95
+    - `losses/base.py` (giải thích 28 dòng) - Triển khai Dice Loss + BCE
+    - `metrics/base.py` (giải thích 248 dòng) - Tính toán IoU, Dice, HD95
   - **Mixed Precision (AMP)**: GradScaler hoạt động như thế nào, tăng tốc 2× trên RTX 3090
   - **Lịch trình learning rate**: Cosine warmup + ReduceLROnPlateau
   - **Hệ thống checkpoint**: Lưu toàn trạng thái huấn luyện (model, optimizer, scaler, số fold)
@@ -228,8 +228,8 @@ Báo cáo này chứa **13,473 dòng** tài liệu kỹ thuật chi tiết chia 
 Nhảy đến phần bạn cần:
 - **Chỉnh sửa data augmentation**: [[v_02_DATA_PIPELINE]] → Phần về `transforms.py` (dòng 800-1100)
 - **Thay đổi kiến trúc model**: [[v_03_MODEL_ARCHITECTURE]] → Hướng dẫn chỉnh sửa cho mỗi file
-- **Thêm loss function mới**: [[v_04_TRAINING_SYSTEM]] → Phần về `losses.py` + [[v_10_EXTENSION_GUIDE]]
-- **Thêm metric mới**: [[v_04_TRAINING_SYSTEM]] → Phần về `metrics.py` (dòng 1200-1500)
+- **Thêm loss function mới**: [[v_04_TRAINING_SYSTEM]] → Phần về `losses/base.py` + [[v_10_EXTENSION_GUIDE]]
+- **Thêm metric mới**: [[v_04_TRAINING_SYSTEM]] → Phần về `metrics/base.py` (dòng 1200-1500)
 - **Debug vấn đề huấn luyện**: [[v_09_TROUBLESHOOTING]] → Phần lỗi thường gặp
 
 ### Cho Nhà Nghiên Cứu
@@ -328,8 +328,8 @@ src/braintumnet/utils/
 #### 6. Package Cốt Lõi (Metric & Loss) - 2 file
 ```
 src/braintumnet/
-├── losses.py                 [28 dòng]   - Dice Loss + BCE
-└── metrics.py                [248 dòng]  - IoU, Dice, HD95
+├── losses/base.py                 [28 dòng]   - Dice Loss + BCE
+└── metrics/base.py                [248 dòng]  - IoU, Dice, HD95
 ```
 
 **Bao phủ tài liệu**: Giải thích hoàn chỉnh trong [[v_04_TRAINING_SYSTEM]] (1,850 dòng)

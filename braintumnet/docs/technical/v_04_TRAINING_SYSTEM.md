@@ -37,8 +37,8 @@ Training system phối hợp:
 | File | Mục đích | Dòng | Độ phức tạp |
 |------|---------|-------|------------|
 | `engine/trainer.py` | Main training loop | 307 | Cao |
-| `losses.py` | Loss functions | 28 | Thấp |
-| `metrics.py` | Evaluation metrics | 248 | Trung bình |
+| `losses/base.py` | Loss functions | 28 | Thấp |
+| `metrics/base.py` | Evaluation metrics | 248 | Trung bình |
 | `utils/io.py` | Checkpoint I/O | 121 | Trung bình |
 | `utils/logger.py` | Text logging | 204 | Trung bình |
 | `utils/metrics_logger.py` | CSV/JSON logging | ~200 | Trung bình |
@@ -114,7 +114,7 @@ Training system phối hợp:
 
 ## Loss Functions
 
-**File**: `src/braintumnet/losses.py` (28 dòng)
+**File**: `src/braintumnet/losses/base.py` (28 dòng)
 
 BrainTumNet sử dụng **multi-task loss** kết hợp segmentation và classification objectives.
 
@@ -397,7 +397,7 @@ Epoch 50:
 
 ## Metrics và Evaluation
 
-**File**: `src/braintumnet/metrics.py` (248 dòng)
+**File**: `src/braintumnet/metrics/base.py` (248 dòng)
 
 ### Core Functions
 
@@ -1737,7 +1737,7 @@ Ví dụ:
 
 ### Thêm Metric Mới
 
-**Bước 1**: Define metric function trong `metrics.py`:
+**Bước 1**: Define metric function trong `metrics/base.py`:
 ```python
 def precision_score_seg(logits: torch.Tensor, target: torch.Tensor, eps=1e-6) -> float:
     """Precision = TP / (TP + FP)"""

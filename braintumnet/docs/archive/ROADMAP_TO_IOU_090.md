@@ -62,7 +62,7 @@ ED Dice     | 0.8561  | 0.947   | +0.0909  | +11%
 **Solution 1: Add IoU Loss Component**
 
 ```python
-# braintumnet/src/braintumnet/losses_multiclass.py
+# braintumnet/src/braintumnet/losses/multiclass.py
 
 class MulticlassIoULoss(nn.Module):
     """IoU loss for multi-class segmentation"""
@@ -157,7 +157,7 @@ train:
 **Solution: Add Boundary Loss**
 
 ```python
-# braintumnet/src/braintumnet/losses_multiclass.py
+# braintumnet/src/braintumnet/losses/multiclass.py
 
 import scipy.ndimage as ndimage
 
@@ -280,8 +280,8 @@ train:
 ### Phase 1 Summary
 
 **Implement**:
-1. IoU loss component (add to `losses_multiclass.py`)
-2. Boundary loss (add to `losses_multiclass.py`)
+1. IoU loss component (add to `losses/multiclass.py`)
+2. Boundary loss (add to `losses/multiclass.py`)
 3. Combined loss with weights: Dice=1.0, Focal=1.0, IoU=2.0, Boundary=0.5
 4. Class weights: [1.0, 3.0, 2.0] (emphasize TC)
 5. Extended training schedule (300 epochs, cosine restart)
@@ -823,8 +823,8 @@ def distillation_loss(student_logits, teacher_logits, target, temperature=3.0, a
 **Expected: IoU 0.77-0.80**
 
 ### Week 2: Phase 1
-- [ ] Implement `MulticlassIoULoss` in `losses_multiclass.py`
-- [ ] Implement `BoundaryLoss` in `losses_multiclass.py`
+- [ ] Implement `MulticlassIoULoss` in `losses/multiclass.py`
+- [ ] Implement `BoundaryLoss` in `losses/multiclass.py`
 - [ ] Create `CombinedSegmentationLoss`
 - [ ] Create config `phase1_iou_focus.yaml`
 - [ ] Train fold 4 with new loss

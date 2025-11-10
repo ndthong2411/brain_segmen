@@ -37,8 +37,8 @@ The training system coordinates:
 | File | Purpose | Lines | Complexity |
 |------|---------|-------|------------|
 | `engine/trainer.py` | Main training loop | 307 | High |
-| `losses.py` | Loss functions | 28 | Low |
-| `metrics.py` | Evaluation metrics | 248 | Medium |
+| `losses/base.py` | Loss functions | 28 | Low |
+| `metrics/base.py` | Evaluation metrics | 248 | Medium |
 | `utils/io.py` | Checkpoint I/O | 121 | Medium |
 | `utils/logger.py` | Text logging | 204 | Medium |
 | `utils/metrics_logger.py` | CSV/JSON logging | ~200 | Medium |
@@ -114,7 +114,7 @@ The training system coordinates:
 
 ## Loss Functions
 
-**File**: `src/braintumnet/losses.py` (28 lines)
+**File**: `src/braintumnet/losses/base.py` (28 lines)
 
 BrainTumNet uses a **multi-task loss** combining segmentation and classification objectives.
 
@@ -397,7 +397,7 @@ Epoch 50:
 
 ## Metrics and Evaluation
 
-**File**: `src/braintumnet/metrics.py` (248 lines)
+**File**: `src/braintumnet/metrics/base.py` (248 lines)
 
 ### Core Functions
 
@@ -1737,7 +1737,7 @@ Example:
 
 ### Add New Metric
 
-**Step 1**: Define metric function in `metrics.py`:
+**Step 1**: Define metric function in `metrics/base.py`:
 ```python
 def precision_score_seg(logits: torch.Tensor, target: torch.Tensor, eps=1e-6) -> float:
     """Precision = TP / (TP + FP)"""

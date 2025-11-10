@@ -37,7 +37,7 @@ def load_config_auto(model_name=None, hardware=None):
     Priority (later overrides earlier):
     1. base.yaml (common settings)
     2. models/{model}.yaml (model-specific)
-    3. hardware_{hardware}.yaml (hardware-specific)
+    3. hardware/{hardware}.yaml (hardware-specific)
 
     Args:
         model_name: Model name (segunetv2, swin_unetr, nnunet, unetr)
@@ -65,7 +65,7 @@ def load_config_auto(model_name=None, hardware=None):
 
     # 3. Load hardware-specific config if specified
     if hardware:
-        hw_path = configs_dir / f"hardware_{hardware}.yaml"
+        hw_path = configs_dir / "hardware" / f"{hardware}.yaml"
         if hw_path.exists():
             print(f"Loading hardware config: {hw_path}")
             hw_cfg = load_yaml(str(hw_path))

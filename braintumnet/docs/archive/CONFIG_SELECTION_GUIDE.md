@@ -12,13 +12,13 @@ Bạn có GPU gì?
 │     → BEST choice!
 │
 ├─ A100 40GB
-│  └─ ✅ configs/phase2_small.yaml
+│  └─ ✅ configs/phases/phase2_small.yaml
 │     → IoU 0.83-0.85 ensemble
 │     → 10 ngày training
 │     → A100 config sẽ OOM
 │
 ├─ RTX 3090 / RTX 4090 (24GB)
-│  └─ ✅ configs/phase2_small.yaml
+│  └─ ✅ configs/phases/phase2_small.yaml
 │     → IoU 0.83-0.85 ensemble
 │     → 10 ngày training
 │     → Best cho consumer GPU
@@ -91,7 +91,7 @@ Bạn có GPU gì?
 
 ## 2️⃣ Phase 2 Small: RTX 3090 Optimized
 
-**File:** `configs/phase2_small.yaml`
+**File:** `configs/phases/phase2_small.yaml`
 
 ### Khi Nào Dùng?
 - ✅ GPU: RTX 3090, RTX 4090, A100 40GB
@@ -313,7 +313,7 @@ Utilization: 85-95%
 
 ### Phase 2 Small (RTX 3090/4090)
 ```bash
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 ```
 
 ### Phase 2 A100 (A100 80GB)

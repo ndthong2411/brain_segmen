@@ -3,15 +3,25 @@ import numpy as np
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from typing import Dict
-from ..models.braintumnet import BrainTumNet
+from pathlib import Path
 from ..data.dataset_factory import create_dataset, get_data_root
 from ..losses import MultiTaskLoss, dice_loss_with_logits
-from ..metrics import iou_score, dice_score, compute_hausdorff_distance_95
+from ..metrics import (
+    compute_hausdorff_distance_95,
+    compute_intersection_union,
+    dice_score,
+    iou_score,
+)
 from ..utils.io import ensure_dir, save_ckpt, save_training_state
 from ..utils.logger import TrainingLogger
 from ..utils.metrics_logger import MetricsLogger
-from ..metrics import compute_intersection_union
-from ..multiclass_metrics import MulticlassMetricsAccumulator, get_multiclass_predictions, visualize_multiclass_prediction
+from ..metrics.multiclass import (
+    MulticlassMetricsAccumulator,
+    get_multiclass_predictions,
+    visualize_multiclass_prediction,
+)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -164,6 +174,13 @@ def _sanitize_artifact_name(name: str) -> str:
     return safe or "model"
 
 
+def _resolve_project_path(path_str: str) -> str:
+    path = Path(path_str)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return str(path)
+
+
 def prepare_artifact_dirs(cfg: Dict) -> Dict[str, str]:
     logging_cfg = cfg.setdefault("logging", {})
     exp_name = logging_cfg.get("exp_name", cfg.get("exp_name", "braintumnet"))
@@ -193,13 +210,18 @@ def prepare_artifact_dirs(cfg: Dict) -> Dict[str, str]:
 
     if base_log_dir is None:
         base_log_dir = logging_cfg.get("log_dir", "logs")
-        logging_cfg["_base_log_dir"] = base_log_dir
+    base_log_dir = _resolve_project_path(base_log_dir)
+    logging_cfg["_base_log_dir"] = base_log_dir
+
     if base_out_dir is None:
         base_out_dir = logging_cfg.get("out_dir", "runs")
-        logging_cfg["_base_out_dir"] = base_out_dir
+    base_out_dir = _resolve_project_path(base_out_dir)
+    logging_cfg["_base_out_dir"] = base_out_dir
+
     if base_save_dir is None:
         base_save_dir = logging_cfg.get("save_dir", "checkpoints")
-        logging_cfg["_base_save_dir"] = base_save_dir
+    base_save_dir = _resolve_project_path(base_save_dir)
+    logging_cfg["_base_save_dir"] = base_save_dir
 
     log_dir = os.path.join(base_log_dir, model_identifier, exp_name)
     out_dir = os.path.join(base_out_dir, model_identifier, exp_name)
@@ -302,7 +324,7 @@ def train_one_fold(cfg: Dict, fold: int, config_path: str = None, resume_from: s
 
     # Check if using new Ultimate loss system (Phase 1+)
     if loss_type in ["ultimate", "ultimate_multitask"]:
-        from ..losses_combined import create_loss_from_config
+        from ..losses.combined import create_loss_from_config
         crit = create_loss_from_config(cfg)
         logger.info(f"Using loss type: {loss_type} (Phase 1+ Ultimate Loss)")
         logger.info(f"  Loss components: Dice + Focal + IoU + Boundary")

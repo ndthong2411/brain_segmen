@@ -51,7 +51,7 @@ train:
 
 ### 1. MultiClassDiceLoss
 
-**File**: `src/braintumnet/losses_multiclass.py:63`
+**File**: `src/braintumnet/losses/multiclass.py:63`
 
 ```python
 # Compute Dice for each class
@@ -85,7 +85,7 @@ total_loss = torch.stack(dice_scores).mean()
 
 ### 2. MulticlassIoULoss
 
-**File**: `src/braintumnet/losses_iou.py:70`
+**File**: `src/braintumnet/losses/iou.py:70`
 
 ```python
 # Same logic as Dice
@@ -117,7 +117,7 @@ loss = 1.0 - mean_iou
 
 ### 3. MultiClassFocalLoss
 
-**File**: `src/braintumnet/losses_multiclass.py:96-105`
+**File**: `src/braintumnet/losses/multiclass.py:96-105`
 
 ```python
 def __init__(self, num_classes=3, alpha=None, gamma=2.0, ignore_background=True):
@@ -155,7 +155,7 @@ return loss.mean()
 
 ### 4. BoundaryLoss
 
-**File**: `src/braintumnet/losses_boundary.py:43`
+**File**: `src/braintumnet/losses/boundary.py:43`
 
 ```python
 def __init__(self, theta0=3, theta=5, ignore_background=True):

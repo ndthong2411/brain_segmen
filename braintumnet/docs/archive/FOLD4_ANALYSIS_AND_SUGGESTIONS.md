@@ -210,7 +210,7 @@ model:
 #### B. Increase Deep Supervision Weight
 
 ```python
-# src/braintumnet/losses_multiclass.py (modify)
+# src/braintumnet/losses/multiclass.py (modify)
 # Current: aux_weight = 0.3 for all auxiliary outputs
 
 aux3_weight = 0.5  # 64×64 resolution
@@ -375,7 +375,7 @@ pred = ensemble_predict(models, test_input)
    ```
 
 5. **Stronger Deep Supervision**
-   - Modify `losses_multiclass.py`
+   - Modify `losses/multiclass.py`
    - Increase auxiliary loss weights to [0.5, 0.4, 0.3]
 
 6. **Retrain All Folds**
@@ -560,7 +560,7 @@ print(df['case_id'].value_counts())  # Check case distribution
 
 - Your comparison doc: [COMPARISON_PATCHBASED_VS_BRAINTUMNET.md](COMPARISON_PATCHBASED_VS_BRAINTUMNET.md)
 - Config file: [configs/multiclass.yaml](../configs/multiclass.yaml)
-- Loss implementation: [src/braintumnet/losses_multiclass.py](../src/braintumnet/losses_multiclass.py)
+- Loss implementation: [src/braintumnet/losses/multiclass.py](../src/braintumnet/losses/multiclass.py)
 - BraTS 2020 benchmark: https://www.med.upenn.edu/cbica/brats2020/
 
 ---

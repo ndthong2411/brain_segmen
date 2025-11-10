@@ -45,7 +45,7 @@ python -c "import pydicom; print('pydicom version:', pydicom.__version__)"
 #### **Basic Usage**
 
 ```bash
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "E:\data\brats2020\h5_files" \
     --out_dir "E:\data\brats2020_dicom"
 ```
@@ -53,7 +53,7 @@ python scripts/convert_h5_to_dicom.py \
 #### **With Custom Metadata**
 
 ```bash
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "E:\data\brats2020\h5_files" \
     --out_dir "E:\data\brats2020_dicom" \
     --patient_prefix "BraTS20_" \
@@ -64,7 +64,7 @@ python scripts/convert_h5_to_dicom.py \
 #### **Test với Ít Files**
 
 ```bash
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "E:\data\brats2020\h5_files" \
     --out_dir "E:\data\test_dicom" \
     --max_files 10
@@ -268,7 +268,7 @@ print("DICOM range:", dicom_image.min(), "-", dicom_image.max())
 
 ```bash
 # Step 1: Convert H5 to DICOM
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "E:\data\brats2020\h5_files" \
     --out_dir "E:\data\brats2020_dicom"
 
@@ -279,7 +279,7 @@ python scripts/preprocess_dicom_to_multiclass.py \
     --structure brats
 
 # Step 3: Train model
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 
 # Step 4: Inference (có thể xuất kết quả ra DICOM)
 # TODO: Thêm script export predictions to DICOM
@@ -420,7 +420,7 @@ pixel_array = pixel_array * ds.RescaleSlope + ds.RescaleIntercept
 
 ```bash
 # Convert research data to clinical format
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "research_data/" \
     --out_dir "clinical_dicom/" \
     --institution "Your Hospital" \
@@ -433,7 +433,7 @@ python scripts/convert_h5_to_dicom.py \
 
 ```bash
 # Create shareable DICOM datasets
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "data/" \
     --out_dir "shared_dicom/" \
     --patient_prefix "ANONYMIZED_"
@@ -447,7 +447,7 @@ zip -r shared_dicom.zip shared_dicom/
 ```bash
 # Test model on DICOM format
 # 1. Convert H5 to DICOM
-python scripts/convert_h5_to_dicom.py \
+python scripts/preprocessing/convert_h5_to_dicom.py \
     --h5_dir "test_data/" \
     --out_dir "test_dicom/" \
     --max_files 10
@@ -459,7 +459,7 @@ python scripts/preprocess_dicom_to_multiclass.py \
 
 # 3. Run inference
 python scripts/predict.py \
-    --cfg configs/phase2_small.yaml \
+    --cfg configs/phases/phase2_small.yaml \
     --ckpt checkpoints/best.pth \
     --img "test_png/flair/sample.png"
 ```

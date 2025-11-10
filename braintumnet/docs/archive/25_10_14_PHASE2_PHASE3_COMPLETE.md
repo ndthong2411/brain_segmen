@@ -75,7 +75,7 @@ class BrainTumNetV2(nn.Module):
     """
 ```
 
-#### 3. [configs/phase2_small.yaml](../configs/phase2_small.yaml)
+#### 3. [configs/phases/phase2_small.yaml](../configs/phases/phase2_small.yaml)
 
 **Phase 2 Training Configuration**:
 
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     import yaml
 
     # Load config
-    with open('configs/phase2_small.yaml') as f:
+    with open('configs/phases/phase2_small.yaml') as f:
         config = yaml.safe_load(f)
 
     # Load all 5 fold models
@@ -363,7 +363,7 @@ if __name__ == "__main__":
 
 **Usage**:
 ```bash
-python scripts/ensemble_inference.py --config configs/phase2_small.yaml --fold_checkpoints checkpoints/phase2_best_fold*.pth --input test_image.npy --output prediction.npy
+python scripts/ensemble_inference.py --config configs/phases/phase2_small.yaml --fold_checkpoints checkpoints/phase2_best_fold*.pth --input test_image.npy --output prediction.npy
 ```
 
 ### 3C. CRF Post-Processing
@@ -520,7 +520,7 @@ def full_ensemble_pipeline(models, image, device='cuda'):
 ```bash
 # Train all 5 folds with Phase 2 Small config
 for fold in 0 1 2 3 4; do
-    python scripts/train.py --cfg configs/phase2_small.yaml --fold $fold
+    python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold $fold
 done
 ```
 
@@ -537,13 +537,13 @@ done
 
 ```bash
 # Evaluate with TTA
-python scripts/tta_inference.py --config configs/phase2_small.yaml --checkpoint checkpoints/phase2_best_fold0.pth
+python scripts/tta_inference.py --config configs/phases/phase2_small.yaml --checkpoint checkpoints/phase2_best_fold0.pth
 
 # Evaluate with Ensemble
-python scripts/ensemble_inference.py --config configs/phase2_small.yaml --fold_checkpoints "checkpoints/phase2_best_fold*.pth"
+python scripts/ensemble_inference.py --config configs/phases/phase2_small.yaml --fold_checkpoints "checkpoints/phase2_best_fold*.pth"
 
 # Evaluate with Ensemble + TTA + CRF
-python scripts/full_pipeline.py --config configs/phase2_small.yaml --fold_checkpoints "checkpoints/phase2_best_fold*.pth" --use_tta --use_crf
+python scripts/full_pipeline.py --config configs/phases/phase2_small.yaml --fold_checkpoints "checkpoints/phase2_best_fold*.pth" --use_tta --use_crf
 ```
 
 **Expected results**:
@@ -659,7 +659,7 @@ print(f'Model works! Seg: {seg.shape}')
 
 3. **Start training**:
 ```bash
-python scripts/train.py --cfg configs/phase2_small.yaml --fold 0
+python scripts/train.py --cfg configs/phases/phase2_small.yaml --fold 0
 ```
 
 ### Short-term (This Week)
